@@ -805,13 +805,19 @@ Approve in the desktop app to continue.`,
   ): Promise<SentMessage | undefined> {
     if (adapter.platform === 'qq') {
       const files = await this.getReplyFiles?.(binding, text) ?? []
-      const sent = await adapter.sendText(binding.channelId, stripQQFileLinks(text), bindingOpts(binding))
+      const deliveredTargets = new Set<string>()
+      let sent: SentMessage | undefined
       for (const file of files) {
-        try { await adapter.sendFile(binding.channelId, file.buffer, file.filename) }
+        try {
+          sent = await adapter.sendFile(binding.channelId, file.buffer, file.filename)
+          for (const target of file.linkTargets ?? []) deliveredTargets.add(target)
+        }
         catch {
           await adapter.sendText(binding.channelId, `附件「${file.filename}」未能发送。请在 Craft App 中打开；也请检查 QQ 机器人的文件消息权限。`)
         }
       }
+      const replyText = stripQQFileLinks(text, deliveredTargets)
+      if (replyText) sent = await adapter.sendText(binding.channelId, replyText, bindingOpts(binding))
       return sent
     }
     const maxLen = adapter.capabilities.maxMessageLength

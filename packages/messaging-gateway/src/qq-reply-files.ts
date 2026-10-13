@@ -3,7 +3,7 @@ import { open, realpath } from 'node:fs/promises'
 import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { QQ_MAX_ATTACHMENTS, QQ_MAX_FILE_BYTES } from './adapters/qq/attachments'
 
-export interface QQReplyFile { buffer: Buffer; filename: string }
+export interface QQReplyFile { buffer: Buffer; filename: string; linkTargets?: string[] }
 
 const FILE_LINK = /!?\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\s*\)/g
 
@@ -14,21 +14,22 @@ function localFileTarget(raw: string): string | null {
   try { return decodeURIComponent(value).replace(/:\d+$/, '') } catch { return null }
 }
 
-/** QQ plain text cannot open local links; keep the label and send the file separately. */
-export function stripQQFileLinks(text: string): string {
+/** Omit links delivered as attachments; unresolved local links retain a path-free label. */
+export function stripQQFileLinks(text: string, deliveredTargets: ReadonlySet<string> = new Set()): string {
   return text.replace(FILE_LINK, (match, label: string, angle: string | undefined, plain: string | undefined) => {
     const path = localFileTarget(angle || plain || '')
     if (path === null) return match
+    if (deliveredTargets.has(path)) return ''
     const name = label.trim()
     return name && !isAbsolute(name) ? name : basename(path)
-  })
+  }).replace(/^\s*[-*+]\s*$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 /** Only explicit file links in the reply, within this session's output/cwd roots. */
 export async function readQQReplyFiles(text: string, roots: string[]): Promise<QQReplyFile[]> {
   const allowed = (await Promise.all(roots.map(root => realpath(root).catch(() => null)))).filter((root): root is string => !!root)
   const files: QQReplyFile[] = []
-  const seen = new Set<string>()
+  const seen = new Map<string, QQReplyFile>()
   for (const match of text.matchAll(FILE_LINK)) {
     const value = localFileTarget(match[2] || match[3] || '')
     if (value === null) continue
@@ -36,11 +37,17 @@ export async function readQQReplyFiles(text: string, roots: string[]): Promise<Q
     for (const candidate of candidates) {
       // Never turn links to hidden configuration or credentials into QQ uploads.
       const path = await realpath(candidate).catch(() => null)
-      if (!path || seen.has(path) || !allowed.some(root => {
+      if (!path || !allowed.some(root => {
         const child = relative(root, path)
         return child !== '' && child !== '..' && !child.startsWith('../') && !isAbsolute(child) &&
           !child.split(/[\\/]/).some(part => part.startsWith('.') || part === 'credentials.enc')
       })) continue
+      const existing = seen.get(path)
+      if (existing) {
+        if (!existing.linkTargets!.includes(value)) existing.linkTargets!.push(value)
+        break
+      }
+      if (files.length >= QQ_MAX_ATTACHMENTS) continue
       // Refuse symlink replacements and bound the allocation using the opened file.
       const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW).catch(() => null)
       if (!file) continue
@@ -55,12 +62,12 @@ export async function readQQReplyFiles(text: string, roots: string[]): Promise<Q
           offset += read.bytesRead
         }
         if (offset !== buffer.length) continue
-        seen.add(path)
-        files.push({ buffer, filename: basename(path) })
+        const replyFile = { buffer, filename: basename(path), linkTargets: [value] }
+        seen.set(path, replyFile)
+        files.push(replyFile)
       } finally { await file.close() }
       break
     }
-    if (files.length >= QQ_MAX_ATTACHMENTS) break
   }
   return files
 }

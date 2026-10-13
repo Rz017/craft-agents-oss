@@ -45,6 +45,8 @@ describe('QQ outbound reply files', () => {
     const files = await readQQReplyFiles(text, [root])
     expect(files.map(file => file.filename)).toEqual(['report with spaces.txt'])
     expect(files[0]?.buffer.toString()).toBe('report body')
+    expect(stripQQFileLinks(`[report](<${report}>)\n- [again](<${report}>)`, new Set(files[0]?.linkTargets))).toBe('')
+    expect(files[0]?.linkTargets).toEqual([report])
   })
 
   it('accepts whitespace after the opening parenthesis in an AI-generated QQ file link', async () => {
@@ -53,5 +55,15 @@ describe('QQ outbound reply files', () => {
     const files = await readQQReplyFiles(`已生成：[连接测试.txt]( ${path})`, [root])
     expect(files.map(file => file.filename)).toEqual(['连接测试.txt'])
     expect(files[0]?.buffer.toString()).toBe('QQ附件连接正常')
+  })
+
+  it('omits every relative and file URL reference to the same delivered attachment', async () => {
+    const root = tempDir(), path = join(root, 'report.txt')
+    writeFileSync(path, 'report')
+    const text = `[a](${path})\n[b](./report.txt)\n[c](file://${path})`
+    const files = await readQQReplyFiles(text, [root])
+    expect(files).toHaveLength(1)
+    expect(new Set(files[0]?.linkTargets)).toEqual(new Set([path, './report.txt']))
+    expect(stripQQFileLinks(text, new Set(files[0]?.linkTargets))).toBe('')
   })
 })
