@@ -514,6 +514,13 @@ export function copyPiAgentServer(config: BuildConfig): void {
   // 1. Copy index.js
   copyFileSync(join(piSourceDir, 'index.js'), join(piDestDir, 'index.js'));
 
+  // Photon loads its WASM beside its JS entry; keep that package external and portable.
+  const photonSource = join(rootDir, 'node_modules', '@silvia-odwyer', 'photon-node');
+  if (!existsSync(join(photonSource, 'photon_rs_bg.wasm'))) {
+    throw new Error('Photon image runtime is missing; Pi image input would fail.');
+  }
+  cpSync(photonSource, join(piDestDir, 'node_modules', '@silvia-odwyer', 'photon-node'), { recursive: true });
+
   // 2. Copy koffi npm package (external import, resolved via node_modules at runtime)
   const koffiSource = join(rootDir, 'node_modules', 'koffi');
 
@@ -570,7 +577,7 @@ export function buildSubprocessServers(config: BuildConfig): void {
   if (existsSync(join(piDir, 'src'))) {
     mkdirSync(join(piDir, 'dist'), { recursive: true });
     execSync(
-      `bun build ${join(piDir, 'src', 'index.ts')} --outdir ${join(piDir, 'dist')} --target bun --format esm --external koffi`,
+      `bun build ${join(piDir, 'src', 'index.ts')} --outdir ${join(piDir, 'dist')} --target bun --format esm --external koffi --external @silvia-odwyer/photon-node`,
       { cwd: rootDir, stdio: 'inherit', shell: true }
     );
     if (!existsSync(piOut)) {

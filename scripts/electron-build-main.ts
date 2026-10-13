@@ -194,6 +194,7 @@ async function buildPiAgentServer(): Promise<void> {
       "--target", "bun",
       "--format", "esm",
       "--external", "koffi",
+      "--external", "@silvia-odwyer/photon-node",
     ],
     cwd: ROOT_DIR,
     stdout: "inherit",

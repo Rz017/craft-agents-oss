@@ -38,6 +38,7 @@ jobs:
       - name: Validate changes
         run: |
           bun test packages/messaging-gateway apps/electron/src/main/__tests__/qq-updates.test.ts apps/electron/src/transport/__tests__/routed-client.test.ts apps/electron/src/transport/__tests__/channel-map-parity.test.ts packages/shared/src/i18n/__tests__/locale-parity.test.ts
+          bun test packages/pi-agent-server/src/bundle-smoke.test.ts
           bun run typecheck:shared
           bun run typecheck:electron
       - name: Build and verify release archive

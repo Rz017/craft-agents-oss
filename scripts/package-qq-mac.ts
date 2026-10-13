@@ -21,6 +21,7 @@ const resources = [
   { from: join(dependencies, '@anthropic-ai', 'claude-agent-sdk-darwin-arm64'), to: 'app/node_modules/@anthropic-ai/claude-agent-sdk-binary' },
   { from: join(dependencies, '@vscode', 'ripgrep'), to: 'app/node_modules/@vscode/ripgrep' },
   { from: join(root, 'packages', 'pi-agent-server', 'dist', 'index.js'), to: 'app/resources/pi-agent-server/index.js' },
+  { from: join(dependencies, '@silvia-odwyer', 'photon-node'), to: 'app/resources/pi-agent-server/node_modules/@silvia-odwyer/photon-node' },
   { from: join(root, 'packages', 'messaging-whatsapp-worker', 'dist', 'worker.cjs'), to: 'messaging-whatsapp-worker/worker.cjs' },
 ]
 const env = {
@@ -59,6 +60,12 @@ writeFileSync(configPath, JSON.stringify({
   },
 }, null, 2))
 run(join(dependencies, '.bin', 'electron-builder'), ['--config', configPath, '--mac', '--arm64', '--dir', '--publish', 'never'], appDir)
+const packagedResources = join(output, 'mac-arm64', 'Craft Agents QQ.app', 'Contents', 'Resources', 'app')
+run(bun, [join(root, 'scripts', 'verify-pi-images.ts'),
+  '--bun', join(packagedResources, 'vendor', 'bun', 'bun'),
+  '--bundle', join(packagedResources, 'resources', 'pi-agent-server', 'index.js'),
+  '--photon', join(packagedResources, 'resources', 'pi-agent-server', 'node_modules', '@silvia-odwyer', 'photon-node'),
+])
 console.log(`Built App: ${join(output, 'mac-arm64', 'Craft Agents QQ.app')}`)
 if (process.argv.includes('--archive')) {
   const archive = join(output, `Craft-Agents-QQ-${version}-arm64.zip`)
