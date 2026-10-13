@@ -37,9 +37,17 @@ describe('QQ outbound reply files', () => {
     writeFileSync(join(outside, 'secret.txt'), 'secret')
     mkdirSync(join(root, '.private')); writeFileSync(join(root, '.private', 'token.txt'), 'secret')
     symlinkSync(join(outside, 'secret.txt'), join(root, 'escape.txt'))
-    const text = `[report](<${report}>) [again](<${report}>) [outside](${join(outside, 'secret.txt')}) [symlink](${join(root, 'escape.txt')}) [hidden](${join(root, '.private', 'token.txt')}) [web](https://example.com/a.png)`
+    const text = `[report]( <${report}> ) [again](<${report}> "report title") [outside](${join(outside, 'secret.txt')}) [symlink](${join(root, 'escape.txt')}) [hidden](${join(root, '.private', 'token.txt')}) [web](https://example.com/a.png)`
     const files = await readQQReplyFiles(text, [root])
     expect(files.map(file => file.filename)).toEqual(['report with spaces.txt'])
     expect(files[0]?.buffer.toString()).toBe('report body')
+  })
+
+  it('accepts whitespace after the opening parenthesis in an AI-generated QQ file link', async () => {
+    const root = tempDir(), path = join(root, '连接测试.txt')
+    writeFileSync(path, 'QQ附件连接正常')
+    const files = await readQQReplyFiles(`已生成：[连接测试.txt]( ${path})`, [root])
+    expect(files.map(file => file.filename)).toEqual(['连接测试.txt'])
+    expect(files[0]?.buffer.toString()).toBe('QQ附件连接正常')
   })
 })

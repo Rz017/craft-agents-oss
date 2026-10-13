@@ -10,7 +10,7 @@ export async function readQQReplyFiles(text: string, roots: string[]): Promise<Q
   const allowed = (await Promise.all(roots.map(root => realpath(root).catch(() => null)))).filter((root): root is string => !!root)
   const files: QQReplyFile[] = []
   const seen = new Set<string>()
-  for (const match of text.matchAll(/!?\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))\)/g)) {
+  for (const match of text.matchAll(/!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\s*\)/g)) {
     let value = match[1] || match[2] || ''
     if (/^(?:https?:|data:|sandbox:|codex:)/i.test(value)) continue
     if (value.startsWith('file://')) { try { value = new URL(value).pathname } catch { continue } }
