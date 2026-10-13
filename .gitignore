@@ -76,5 +76,6 @@ credentials.enc
 
 # Local QQ build runtime and previews
 .local-tools/
+/vendor/bun/
 .qq-profile/
 .qq-preview/

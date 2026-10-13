@@ -59,6 +59,42 @@ describe('resolveServerPath fallback', () => {
   });
 });
 
+describe('local Bun runtime in custom development builds', () => {
+  const root = join(tmpdir(), `local-bun-resolver-${Date.now()}`);
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  function installLocalBun() {
+    const bin = join(root, '.local-tools', process.platform === 'win32' ? 'bun.exe' : 'bun');
+    mkdirSync(join(root, '.local-tools'), { recursive: true });
+    writeFileSync(bin, '#!/bin/sh\nexit 0\n');
+    chmodSync(bin, 0o755);
+    return bin;
+  }
+
+  it('finds local Bun even after the macOS shell loader removes it from PATH', () => {
+    const localBun = installLocalBun();
+    const previousPath = process.env.PATH;
+    try {
+      process.env.PATH = '/usr/bin:/bin';
+      const paths = resolveBackendRuntimePaths({ appRootPath: root, isPackaged: false });
+      expect(paths.nodeRuntimePath).toBe(localBun);
+      expect(paths.bundledRuntimePath).toBe(localBun);
+    } finally { process.env.PATH = previousPath; }
+  });
+
+  it('finds the repository runtime from an apps/electron development root', () => {
+    const localBun = installLocalBun();
+    const appRootPath = join(root, 'apps', 'electron');
+    mkdirSync(appRootPath, { recursive: true });
+    expect(resolveBackendRuntimePaths({ appRootPath, isPackaged: false }).nodeRuntimePath).toBe(localBun);
+  });
+
+  it('does not use a development runtime for packaged apps', () => {
+    installLocalBun();
+    expect(resolveBackendRuntimePaths({ appRootPath: root, isPackaged: true }).bundledRuntimePath).toBeUndefined();
+  });
+});
+
 describe('resolveRipgrepPath', () => {
   const tmpBase = join(tmpdir(), `rg-resolver-test-${Date.now()}`);
 

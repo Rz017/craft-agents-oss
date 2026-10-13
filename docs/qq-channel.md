@@ -51,6 +51,8 @@ bun run typecheck:shared
 bun run electron:build
 ```
 
+本地源码运行时，AI 子进程直接使用仓库 `.local-tools/bun`；无需依赖启动器的 PATH 条目。macOS App 会重新加载登录 shell 的 PATH，因此不能只靠启动器设置 PATH。若缺少该运行时，请安装 Bun 或补齐本地运行时后再启动。
+
 真实联调时使用两个测试群：分别配对不同对话，确认各自的问题与回复；在其中一个群执行 `/bind` 切换，检查另一个群保持原绑定。关闭并重启 App，确认连接和绑定恢复。App Secret 在 App 中输入，不需要粘贴到聊天中。
 
 开发参考：腾讯 [QQ 接入项目](https://github.com/tencent-connect/openclaw-qqbot)、[官方接口文档](https://github.com/tencent-connect/bot-docs)。

@@ -70,6 +70,10 @@ function resolveBundledRuntimePath(hostRuntime: BackendHostRuntimeContext): stri
   // Packaged apps must ship their own bundled bun — never resolve from PATH
   // to avoid picking up an incompatible system install.
   if (!hostRuntime.isPackaged) {
+    // Local custom builds carry Bun beside the source. macOS shell-env loading
+    // replaces PATH, so a launcher-only PATH entry is insufficient here.
+    const localBun = resolveUpwards(hostRuntime.appRootPath, join('.local-tools', bunBinary));
+    if (localBun) return localBun;
     try {
       const whichCmd = process.platform === 'win32' ? 'where' : 'which';
       const systemBun = execFileSync(whichCmd, ['bun'], { encoding: 'utf-8' }).trim();
