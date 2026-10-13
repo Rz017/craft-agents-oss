@@ -4,7 +4,7 @@
 
 # Craft Agents
 
-> **Craft Agents QQ 定制版**：在 `codex/qq-messaging` 分支增加 QQ 官方机器人文字渠道、配对和会话切换，并提供可与原版并存的 macOS App 打包脚本。每个 Workspace 配置一个机器人，不同群聊可绑定不同会话。远程 Workspace 使用 QQ 时，服务器也需部署此定制分支。安装、构建、远程部署与更新方式见 [QQ 使用说明](docs/qq-channel.md)。
+> **Craft Agents QQ 定制版**：在 `codex/qq-messaging` 分支增加 QQ 官方机器人文字、图片及文件附件、配对和会话切换，并提供可与原版并存的 macOS App、GitHub 自动打包发布和新版提醒。每个 Workspace 配置一个机器人，不同群聊可绑定不同会话。远程 Workspace 使用 QQ 时，服务器也需部署此定制分支。安装、构建、远程部署与更新方式见 [QQ 使用说明](docs/qq-channel.md)。
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)

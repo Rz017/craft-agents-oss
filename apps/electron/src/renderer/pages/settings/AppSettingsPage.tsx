@@ -340,6 +340,13 @@ export default function AppSettingsPage() {
               </Button>
             </SettingsRow>
           )}
+          {isElectron && updateChecker.updateInfo?.updateMode === 'manual' && (
+            <SettingsRow label={t('settings.about.qqUpdateSource')} description={t('toast.qqUpdateManual')}>
+              <Button variant="secondary" size="md" onClick={updateChecker.openDownloadPage}>
+                {t('settings.about.qqDownload')}
+              </Button>
+            </SettingsRow>
+          )}
         </SettingsCard>
       </SettingsSection>
     </SettingsPage>

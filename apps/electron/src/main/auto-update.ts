@@ -29,6 +29,7 @@ import { readJsonFileSync } from '@craft-agent/shared/utils/files'
 import { RPC_CHANNELS, type UpdateInfo } from '../shared/types'
 import type { EventSink } from '@craft-agent/server-core/transport'
 import { isQQCustomBuild } from './custom-build'
+import { checkQQRelease, QQ_RELEASES_URL } from './qq-updates'
 
 // Platform detection
 const PLATFORM = platform()
@@ -59,10 +60,11 @@ function getUpdateCacheDir(): string {
 // Module state — keeps track of update info for IPC queries
 let updateInfo: UpdateInfo = {
   available: false,
-  currentVersion: getAppVersion(),
+  currentVersion: isQQCustomBuild ? app.getVersion() : getAppVersion(),
   latestVersion: null,
   downloadState: 'idle',
   downloadProgress: 0,
+  ...(isQQCustomBuild ? { updateMode: 'manual' as const, releaseUrl: QQ_RELEASES_URL } : {}),
 }
 
 let eventSink: EventSink | null = null
@@ -360,6 +362,18 @@ function checkForExistingDownload(): { exists: boolean; version?: string } {
  * @param options.autoDownload - If false, only checks without downloading (for manual "Check Now")
  */
 export async function checkForUpdates(options: CheckOptions = {}): Promise<UpdateInfo> {
+  if (isQQCustomBuild) {
+    try {
+      const release = await checkQQRelease(app.getVersion())
+      updateInfo = { ...updateInfo, available: !!release, latestVersion: release?.version ?? null,
+        releaseUrl: release?.url ?? QQ_RELEASES_URL, error: undefined, downloadState: 'idle' }
+      broadcastUpdateInfo()
+      return getUpdateInfo()
+    } catch (error) {
+      updateInfo = { ...updateInfo, error: error instanceof Error ? error.message : 'GitHub update check failed' }
+      throw error
+    }
+  }
   if (UPDATES_DISABLED) return updateInfo
   const { autoDownload = true } = options
 
@@ -499,6 +513,8 @@ export async function checkForUpdatesOnLaunch(): Promise<UpdateOnLaunchResult> {
   autoUpdateLog.info('Checking for updates on launch...')
 
   const info = await checkForUpdates({ autoDownload: true })
+
+  if (info.updateMode === 'manual') return { action: 'none' }
 
   if (!info.available) {
     return { action: 'none' }

@@ -12,6 +12,8 @@
 import type { ISessionManager } from '@craft-agent/server-core/handlers'
 import { readFileAttachment } from '@craft-agent/shared/utils'
 import type { FileAttachment } from '@craft-agent/shared/protocol'
+import { readFileSync } from 'node:fs'
+import type { StoredAttachment } from '@craft-agent/core/types'
 import {
   evaluateBindingAccess,
   executeRejection,
@@ -35,6 +37,7 @@ const NOOP_LOGGER: MessagingLogger = {
 }
 
 export interface RouterDeps {
+  storeAttachment?: import('./types').StoreMessagingAttachment
   /** Reads the workspace's current MessagingConfig. Called per-message
    *  so config edits take effect without restart. */
   getWorkspaceConfig: () => MessagingConfig
@@ -77,8 +80,29 @@ export class Router {
         return
       }
 
+      let cleanup: (() => Promise<void>) | undefined
       try {
-        const fileAttachments = this.resolveAttachments(msg)
+        const loaded = await msg.loadAttachments?.()
+        cleanup = loaded?.cleanup
+        const fileAttachments = this.resolveAttachments(loaded ? { ...msg, attachments: loaded.attachments } : msg)
+        if (loaded?.attachments.length && !fileAttachments?.length) throw new Error('无法读取附件，请重试或在桌面 App 中添加')
+        const storedAttachments: StoredAttachment[] = []
+        if (loaded && fileAttachments?.length && this.deps.storeAttachment) {
+          for (const attachment of fileAttachments) {
+            // Keep original bytes for unknown file types and empty text files too.
+            if (attachment.type === 'text' || (!attachment.base64 && !attachment.text)) attachment.base64 = readFileSync(attachment.path).toString('base64')
+            const stored = await this.deps.storeAttachment(binding.workspaceId, binding.sessionId, attachment)
+            storedAttachments.push(stored)
+            attachment.path = stored.storedPath
+            if (stored.resizedBase64) { attachment.base64 = stored.resizedBase64; attachment.size = stored.size }
+            if (stored.markdownPath) {
+              attachment.type = 'text'
+              attachment.text = readFileSync(stored.markdownPath, 'utf8')
+              attachment.mimeType = 'text/markdown'
+              delete attachment.base64
+            }
+          }
+        }
         this.log.info('routing inbound chat message to session', {
           event: 'message_routed',
           platform: msg.platform,
@@ -92,7 +116,7 @@ export class Router {
           binding.sessionId,
           msg.text,
           fileAttachments,
-          undefined, // storedAttachments (handled by session layer)
+          storedAttachments.length ? storedAttachments : undefined,
           undefined, // SendMessageOptions
         )
       } catch (err) {
@@ -111,7 +135,7 @@ export class Router {
           `Failed to send message to session: ${errorMsg}`,
           { threadId: msg.threadId },
         )
-      }
+      } finally { await cleanup?.() }
       return
     }
 

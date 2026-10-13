@@ -46,6 +46,7 @@ function bindingOpts(binding: ChannelBinding): SendOptions {
   return binding.threadId !== undefined ? { threadId: binding.threadId } : {}
 }
 import type { PlanTokenRegistry } from './plan-tokens'
+import type { QQReplyFile } from './qq-reply-files'
 
 /** Session event shape (subset of the full SessionEvent from server-core). */
 export interface SessionEvent {
@@ -143,15 +144,18 @@ export class Renderer {
   private readonly planTokens: PlanTokenRegistry | undefined
   private readonly recordPlanMessage: PlanMessageRecorder | undefined
   private readonly recordPermissionMessage: PermissionMessageRecorder | undefined
+  private readonly getReplyFiles: ((binding: ChannelBinding, text: string) => Promise<QQReplyFile[]>) | undefined
 
   constructor(deps?: {
     planTokens?: PlanTokenRegistry
     recordPlanMessage?: PlanMessageRecorder
     recordPermissionMessage?: PermissionMessageRecorder
+    getReplyFiles?: (binding: ChannelBinding, text: string) => Promise<QQReplyFile[]>
   }) {
     this.planTokens = deps?.planTokens
     this.recordPlanMessage = deps?.recordPlanMessage
     this.recordPermissionMessage = deps?.recordPermissionMessage
+    this.getReplyFiles = deps?.getReplyFiles
   }
 
   private getState(bindingId: string): RenderState {
@@ -799,7 +803,17 @@ Approve in the desktop app to continue.`,
     binding: ChannelBinding,
     text: string,
   ): Promise<SentMessage | undefined> {
-    if (adapter.platform === 'qq') return adapter.sendText(binding.channelId, text, bindingOpts(binding))
+    if (adapter.platform === 'qq') {
+      const sent = await adapter.sendText(binding.channelId, text, bindingOpts(binding))
+      const files = await this.getReplyFiles?.(binding, text) ?? []
+      for (const file of files) {
+        try { await adapter.sendFile(binding.channelId, file.buffer, file.filename) }
+        catch {
+          await adapter.sendText(binding.channelId, `附件「${file.filename}」未能发送。请在 Craft App 中打开；也请检查 QQ 机器人的文件消息权限。`)
+        }
+      }
+      return sent
+    }
     const maxLen = adapter.capabilities.maxMessageLength
     const opts = bindingOpts(binding)
     if (text.length <= maxLen) {

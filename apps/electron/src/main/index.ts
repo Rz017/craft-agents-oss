@@ -5,6 +5,7 @@ loadShellEnv()
 
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, shell } from 'electron'
 import { isQQCustomBuild } from './custom-build'
+import { storeFileAttachment } from '@craft-agent/server-core/handlers/rpc/files'
 import { createHash, randomUUID } from 'crypto'
 import { hostname, homedir } from 'os'
 import * as Sentry from '@sentry/electron/main'
@@ -666,6 +667,7 @@ app.whenReady().then(async () => {
           // The WS publisher is attached after bootstrapServer resolves (via
           // handle.setPublisher) because wsServer isn't available yet.
           messagingHandle = createMessagingBootstrap({
+            storeAttachment: (workspaceId, sessionId, attachment) => storeFileAttachment({ platform: p }, workspaceId, sessionId, attachment),
             sessionManager: sm,
             credentialManager: getCredentialManager(),
             getMessagingDir: (wsId: string) =>

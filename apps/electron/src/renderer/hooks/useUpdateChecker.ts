@@ -29,6 +29,7 @@ interface UseUpdateCheckerResult {
   checkForUpdates: () => Promise<void>
   /** Install the downloaded update and restart */
   installUpdate: () => Promise<void>
+  openDownloadPage: () => Promise<void>
 }
 
 // Toast ID for update notification (allows dismiss/update)
@@ -39,6 +40,21 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   // Track if we've shown the toast for this version to avoid duplicates
   const shownToastVersionRef = useRef<string | null>(null)
+
+  const showManualToast = useCallback((info: UpdateInfo, force = false) => {
+    if (!info.latestVersion || !info.releaseUrl || (!force && shownToastVersionRef.current === info.latestVersion)) return
+    shownToastVersionRef.current = info.latestVersion
+    toast.info(t('toast.qqUpdateAvailable', { version: info.latestVersion }), {
+      id: UPDATE_TOAST_ID, duration: 15000,
+      description: t('toast.qqUpdateManual'),
+      action: { label: t('settings.about.qqDownload'), onClick: () => { void window.electronAPI.openUrl(info.releaseUrl!) } },
+      onDismiss: () => { void window.electronAPI.dismissUpdate(info.latestVersion!) },
+    })
+  }, [t])
+
+  const openDownloadPage = useCallback(async () => {
+    if (updateInfo?.updateMode === 'manual' && updateInfo.releaseUrl) await window.electronAPI.openUrl(updateInfo.releaseUrl)
+  }, [updateInfo])
 
   // Show toast notification when update is ready
   const showUpdateToast = useCallback((version: string, onInstall: () => void) => {
@@ -85,7 +101,7 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
   useEffect(() => {
     const checkAndNotify = async (info: UpdateInfo) => {
       if (!info.available || !info.latestVersion) return
-      if (info.downloadState !== 'ready') return
+      if (info.updateMode !== 'manual' && info.downloadState !== 'ready') return
 
       // Check if this version was dismissed
       const dismissedVersion = await window.electronAPI.getDismissedUpdateVersion()
@@ -94,7 +110,8 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
       }
 
       // Show toast for ready update
-      showUpdateToast(info.latestVersion, installUpdate)
+      if (info.updateMode === 'manual') showManualToast(info)
+      else showUpdateToast(info.latestVersion, installUpdate)
     }
 
     // Get initial update info
@@ -118,7 +135,7 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
       cleanupAvailable()
       cleanupProgress()
     }
-  }, [showUpdateToast, installUpdate])
+  }, [showUpdateToast, showManualToast, installUpdate])
 
   // Check for updates manually
   const checkForUpdates = useCallback(async () => {
@@ -131,6 +148,8 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
           description: t('toast.versionIsLatest', { version: info.currentVersion }),
           duration: 3000,
         })
+      } else if (info.updateMode === 'manual') {
+        showManualToast(info, true)
       } else if (info.downloadState === 'ready' && info.latestVersion) {
         // If already ready, show toast (clear any previous dismissal since user explicitly checked)
         shownToastVersionRef.current = null // Reset so toast can show again
@@ -142,7 +161,7 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
         description: error instanceof Error ? error.message : 'Unknown error',
       })
     }
-  }, [showUpdateToast, installUpdate])
+  }, [showUpdateToast, showManualToast, installUpdate])
 
   return {
     updateInfo,
@@ -152,5 +171,6 @@ export function useUpdateChecker(): UseUpdateCheckerResult {
     downloadProgress: updateInfo?.downloadProgress ?? 0,
     checkForUpdates,
     installUpdate,
+    openDownloadPage,
   }
 }

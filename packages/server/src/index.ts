@@ -36,6 +36,7 @@ import { getCredentialManager } from '@craft-agent/shared/credentials'
 import { getWorkspaces } from '@craft-agent/shared/config'
 import { CONFIG_DIR } from '@craft-agent/shared/config/paths'
 import { createMessagingBootstrap, type MessagingBootstrapHandle } from '@craft-agent/messaging-gateway'
+import { storeFileAttachment } from '@craft-agent/server-core/handlers/rpc/files'
 
 // --generate-token: print a crypto-random token and exit
 if (process.argv.includes('--generate-token')) {
@@ -208,6 +209,7 @@ const instance = await (async () => {
       bindRpcServer: (sm, server) => sm.setRpcServer(server),
       createHandlerDeps: ({ sessionManager, platform, oauthFlowStore }) => {
         messagingHandle = createMessagingBootstrap({
+          storeAttachment: (workspaceId, sessionId, attachment) => storeFileAttachment({ platform }, workspaceId, sessionId, attachment),
           sessionManager,
           credentialManager: getCredentialManager(),
           getMessagingDir: (wsId: string) =>

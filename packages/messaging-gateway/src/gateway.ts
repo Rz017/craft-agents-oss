@@ -18,6 +18,9 @@ import { Router } from './router'
 import { Commands, type AccessControlDeps, type PairingCodeConsumer } from './commands'
 import { Renderer, type SessionEvent } from './renderer'
 import { PendingSendersStore } from './pending-senders'
+import { getWorkspaceByNameOrId } from '@craft-agent/shared/config'
+import { getSessionPath } from '@craft-agent/shared/sessions'
+import { readQQReplyFiles } from './qq-reply-files'
 import { PlanTokenRegistry } from './plan-tokens'
 import type {
   PlatformAdapter,
@@ -44,6 +47,7 @@ const consoleLogger: MessagingLogger = {
 }
 
 export interface GatewayOptions {
+  storeAttachment?: import('./types').StoreMessagingAttachment
   sessionManager: ISessionManager
   workspaceId: string
   /** Absolute path to the messaging storage directory. */
@@ -201,11 +205,19 @@ export class MessagingGateway {
       {
         getWorkspaceConfig: this.accessDeps.getWorkspaceConfig,
         pendingStore: this.pendingStore,
+        storeAttachment: opts.storeAttachment,
       },
     )
     this.planTokens = new PlanTokenRegistry()
     this.renderer = new Renderer({
       planTokens: this.planTokens,
+      getReplyFiles: async (binding, text) => {
+        const workspace = getWorkspaceByNameOrId(binding.workspaceId)
+        const cwd = this.sessionManager.getSessionWorkingDirectory?.(binding.sessionId)
+        const roots = [workspace ? getSessionPath(workspace.rootPath, binding.sessionId) : undefined, cwd]
+          .filter((root): root is string => !!root)
+        return readQQReplyFiles(text, roots)
+      },
       // The renderer hands us the exact binding that sent the message.
       // We must not resolve it ourselves — `findBySession` returns every
       // binding and picking the first Telegram binding attributes the

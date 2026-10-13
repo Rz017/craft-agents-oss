@@ -1,5 +1,7 @@
-/** Official QQ Open Platform adapter. Phase 1: C2C/group text and commands. */
+/** Official QQ Open Platform adapter: C2C/group text, attachments and commands. */
 import { QQBot, type QQBotOptions, type QQBotInboundMessage, type ReplyTarget } from '@tencent-connect/qqbot-nodejs'
+import { basename, extname } from 'node:path'
+import { loadQQAttachments, QQ_MAX_FILE_BYTES } from './attachments'
 import type {
   PlatformAdapter, PlatformConfig, AdapterCapabilities, IncomingMessage,
   SentMessage, InlineButton, ButtonPress, MessagingPlatformRuntimeState,
@@ -140,7 +142,9 @@ export class QQAdapter implements PlatformAdapter {
     // Only explicit @mentions trigger group work. Never ingest ambient group traffic.
     if (msg.kind === 'group' && msg.rawEventType !== 'GROUP_AT_MESSAGE_CREATE') return
     const text = msg.content.replace(/^\s*<@!?\d+>\s*/, '').trim()
-    if (!text || !msg.senderId || !msg.messageId || !msg.replyTarget.targetId) return
+    const attachments = msg.attachments ?? []
+    const signal = this.abort?.signal
+    if ((!text && !attachments.length) || !msg.senderId || !msg.messageId || !msg.replyTarget.targetId) return
     const channelId = `${msg.replyTarget.scope}:${msg.replyTarget.targetId}`
     const key = `${channelId}:${msg.messageId}`
     if (this.seen.has(key)) return
@@ -149,10 +153,10 @@ export class QQAdapter implements PlatformAdapter {
     this.replyTargets.delete(channelId)
     this.replyTargets.set(channelId, { ...msg.replyTarget })
     if (this.replyTargets.size > 1000) this.replyTargets.delete(this.replyTargets.keys().next().value!)
-    // Attachment-only events are ignored; mixed events forward just the text.
     await this.messageHandler?.({
       platform: 'qq', channelId, messageId: msg.messageId, senderId: msg.senderId,
-      senderName: msg.senderName, text,
+      senderName: msg.senderName, text: text || '请查看并处理这些附件。',
+      ...(attachments.length ? { loadAttachments: () => loadQQAttachments(attachments, signal) } : {}),
       timestamp: Date.parse(msg.timestamp) || Date.now(), raw: msg.raw,
     })
   }
@@ -185,5 +189,26 @@ export class QQAdapter implements PlatformAdapter {
     return this.sendText(channelId, text)
   }
   async sendTyping(): Promise<void> {}
-  async sendFile(): Promise<SentMessage> { throw new Error('QQ attachments are not supported yet') }
+  async sendFile(channelId: string, file: Buffer, filename: string, caption?: string): Promise<SentMessage> {
+    const bot = this.bot
+    if (!bot || !this.connected) throw new Error('QQ is not connected')
+    const match = /^(c2c|group):(.+)$/.exec(channelId)
+    if (!match) throw new Error('Invalid QQ chat ID')
+    if (!file.length || file.length > QQ_MAX_FILE_BYTES) throw new Error('QQ 附件必须为 1 字节至 20 MB')
+    const target = this.replyTargets.get(channelId) ?? { scope: match[1] as ReplyTarget['scope'], targetId: match[2]! }
+    const name = basename(filename.replace(/\\/g, '/')).replace(/[\x00-\x1f]/g, '_')
+    let messageId = ''
+    const previous = this.queues.get(channelId) ?? Promise.resolve()
+    const task = previous.catch(() => {}).then(async () => {
+      if (this.bot !== bot) throw new Error('QQ connection changed')
+      const extension = extname(name).toLowerCase()
+      const result = ['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(extension)
+        ? await bot.sendImage(target, { buffer: file }, { content: caption })
+        : await bot.sendFile(target, { buffer: file }, { fileName: name, content: caption })
+      messageId = result.message?.id ?? ''
+    })
+    this.queues.set(channelId, task)
+    try { await task } finally { if (this.queues.get(channelId) === task) this.queues.delete(channelId) }
+    return { platform: 'qq', channelId, messageId }
+  }
 }

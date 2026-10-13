@@ -21,7 +21,7 @@ import type { ISessionManager } from '@craft-agent/server-core/handlers'
 
 import { MessagingGatewayRegistry } from './registry'
 import { createFanOutSink, type EventSinkFn } from './event-fanout'
-import type { MessagingLogger } from './types'
+import type { MessagingLogger, StoreMessagingAttachment } from './types'
 
 export type PublishEventFn = (channel: string, target: PushTarget, ...args: unknown[]) => void
 
@@ -33,6 +33,7 @@ export interface MessagingBootstrapOptions {
   /** Optional legacy dir (pre-relocation) for one-shot migration. Headless omits this. */
   getLegacyMessagingDir?: (workspaceId: string) => string | undefined
   logger?: MessagingLogger
+  storeAttachment?: StoreMessagingAttachment
   whatsapp: {
     /** Absolute path to the bundled worker.cjs. */
     workerEntry: string
@@ -72,6 +73,7 @@ export function createMessagingBootstrap(opts: MessagingBootstrapOptions): Messa
     getMessagingDir: opts.getMessagingDir,
     getLegacyMessagingDir: opts.getLegacyMessagingDir,
     logger: opts.logger,
+    storeAttachment: opts.storeAttachment,
     whatsapp: {
       workerEntry: opts.whatsapp.workerEntry,
       nodeBin: opts.whatsapp.nodeBin,

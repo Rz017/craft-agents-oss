@@ -9,6 +9,8 @@
 // Platform types
 // ---------------------------------------------------------------------------
 
+export type StoreMessagingAttachment = (workspaceId: string, sessionId: string, attachment: import('@craft-agent/shared/protocol').FileAttachment) => Promise<import('@craft-agent/core/types').StoredAttachment>
+
 export type PlatformType = 'telegram' | 'whatsapp' | 'lark' | 'qq'
 
 // ---------------------------------------------------------------------------
@@ -104,6 +106,8 @@ export interface IncomingMessage {
   senderIsBot?: boolean
   text: string
   attachments?: IncomingAttachment[]
+  /** Deferred downloads, invoked only after binding and access checks pass. */
+  loadAttachments?: () => Promise<{ attachments: IncomingAttachment[]; cleanup: () => Promise<void> }>
   replyToMessageId?: string
   timestamp: number
   raw: unknown

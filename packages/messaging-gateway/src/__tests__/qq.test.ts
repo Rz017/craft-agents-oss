@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, spyOn } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { QQBot, QQBotInboundMessage, QQBotOptions, ReplyTarget } from '@tencent-connect/qqbot-nodejs'
@@ -23,6 +23,7 @@ function tempDir() { const dir = mkdtempSync(join(tmpdir(), 'craft-qq-')); dirs.
 class FakeBot {
   handlers = new Map<string, (...args: any[]) => any>()
   sent: Array<{ target: ReplyTarget; text: string }> = []
+  media: Array<{ target: ReplyTarget; kind: string; buffer: Buffer; filename?: string }> = []
   stopped = false
   failSend = false
   failStart = false
@@ -41,6 +42,14 @@ class FakeBot {
     return { id: `sent-${this.sent.length}`, timestamp: Date.now() }
   }
   async receive(msg: QQBotInboundMessage) { await this.handlers.get('message')?.({}, msg) }
+  async sendImage(target: ReplyTarget, source: { buffer: Buffer }) {
+    this.media.push({ target: { ...target }, kind: 'image', buffer: source.buffer })
+    return { message: { id: `image-${this.media.length}` }, upload: {} }
+  }
+  async sendFile(target: ReplyTarget, source: { buffer: Buffer }, options: { fileName: string }) {
+    this.media.push({ target: { ...target }, kind: 'file', buffer: source.buffer, filename: options.fileName })
+    return { message: { id: `file-${this.media.length}` }, upload: {} }
+  }
 }
 
 function inbound(targetId: string, content: string, id = content, kind: 'group' | 'c2c' = 'group'): QQBotInboundMessage {
@@ -99,7 +108,60 @@ describe('QQ official adapter', () => {
     await adapter.sendText('group:g1', 'recovered')
     expect(fake.sent.at(-1)?.text).toBe('recovered')
     await expect(adapter.sendText('invalid', 'bad')).rejects.toThrow('Invalid QQ chat ID')
-    await expect(adapter.sendFile()).rejects.toThrow('not supported')
+    await expect(adapter.sendFile('group:g1', Buffer.alloc(0), 'empty.txt')).rejects.toThrow('20 MB')
+  })
+
+  it('uploads images and documents to the right chat using its passive reply target', async () => {
+    const { fake, adapter } = await makeAdapter()
+    await fake.receive(inbound('g1', 'file please', 'source'))
+    await adapter.sendFile('group:g1', Buffer.from('image'), 'preview.png')
+    await adapter.sendFile('c2c:u1', Buffer.from('document'), 'report.pdf')
+    expect(fake.media.map(m => [m.kind, m.target, m.filename])).toEqual([
+      ['image', { scope: 'group', targetId: 'g1', msgId: 'source' }, undefined],
+      ['file', { scope: 'c2c', targetId: 'u1' }, 'report.pdf'],
+    ])
+  })
+
+  it('accepts attachment-only QQ events, downloads only after authorization, and cleans temporary files', async () => {
+    const { fake, adapter } = await makeAdapter()
+    const originalFetch = globalThis.fetch
+    let downloads = 0, downloadedPath = '', temporaryPath = ''
+    const storedPath = join(tempDir(), 'persisted-note.txt')
+    const manager = {
+      getSession: async () => ({ id: 'a', workspaceId: 'ws' }), getSessions: () => [],
+      sendMessage: async (_id: string, text: string, files: any[], stored: any[]) => {
+        expect(text).toContain('附件')
+        expect(files[0].name).toBe('note.txt')
+        expect(files[0].text).toBe('QQ attachment body')
+        downloadedPath = files[0].path
+        expect(existsSync(downloadedPath)).toBe(true)
+        expect(stored[0].storedPath).toBe(storedPath)
+      },
+    } as unknown as ISessionManager
+    const gateway = new MessagingGateway({
+      workspaceId: 'ws', sessionManager: manager, storageDir: tempDir(),
+      storeAttachment: async (workspaceId, sessionId, attachment) => {
+        expect([workspaceId, sessionId]).toEqual(['ws', 'a'])
+        temporaryPath = attachment.path
+        writeFileSync(storedPath, readFileSync(attachment.path))
+        return { id: 'persisted', type: attachment.type, name: attachment.name, mimeType: attachment.mimeType, size: attachment.size, storedPath }
+      },
+      getWorkspaceConfig: () => ({ enabled: true, platforms: { qq: { enabled: true, accessMode: 'owner-only', owners: [{ userId: 'owner', source: 'manual', addedAt: Date.now() }] } } }),
+    })
+    gateway.getBindingStore().bind('ws', 'a', 'qq', 'group:g1')
+    gateway.registerAdapter(adapter); await gateway.start(); cleanups.push(() => gateway.stop())
+    globalThis.fetch = (async () => { downloads++; return new Response('QQ attachment body') }) as unknown as typeof fetch
+    try {
+      const message = { ...inbound('g1', '', 'attachment'), attachments: [{ content_type: 'text/plain', filename: 'note.txt', url: 'https://multimedia.nt.qq.com.cn/file' }] }
+      await fake.receive({ ...message, senderId: 'stranger', messageId: 'blocked' })
+      expect(downloads).toBe(0)
+      await fake.receive(message)
+      await fake.receive(message)
+      expect(downloads).toBe(1)
+      expect(downloadedPath).not.toBe('')
+      expect(existsSync(downloadedPath)).toBe(true)
+      expect(existsSync(temporaryPath)).toBe(false)
+    } finally { globalThis.fetch = originalFetch }
   })
 
   it('reports errors/recovery and stops its socket on destruction', async () => {
@@ -218,6 +280,19 @@ describe('QQ pairing, switching and text routing', () => {
     await renderer.handle({ type: 'credential_request', sessionId: 'a' }, binding, adapter)
     expect(fake.sent.at(-1)?.text).toContain('securely')
     renderer.removeBinding(binding.id)
+  })
+
+  it('sends final response file links as QQ attachments once at completion', async () => {
+    const { fake, adapter } = await makeAdapter()
+    const store = new (await import('../binding-store')).BindingStore(tempDir())
+    const binding = store.bind('ws', 'a', 'qq', 'group:g')
+    const renderer = new Renderer({ getReplyFiles: async () => [{ buffer: Buffer.from('report'), filename: 'report.txt' }] })
+    await renderer.handle({ type: 'text_complete', sessionId: 'a', text: '[报告](/workspace/report.txt)' }, binding, adapter)
+    expect(fake.media).toHaveLength(0)
+    await renderer.handle({ type: 'complete', sessionId: 'a' }, binding, adapter)
+    await renderer.handle({ type: 'complete', sessionId: 'a' }, binding, adapter)
+    expect(fake.media).toHaveLength(1)
+    expect(fake.media[0]?.filename).toBe('report.txt')
   })
 })
 

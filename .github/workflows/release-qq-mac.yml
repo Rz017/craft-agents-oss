@@ -1,0 +1,62 @@
+name: Release Craft Agents QQ (macOS ARM64)
+
+on:
+  push:
+    tags: ['qq-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-qq-mac
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'Rz017/craft-agents-oss'
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: '0.13.0'
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Validate changes
+        run: |
+          bun test packages/messaging-gateway apps/electron/src/main/__tests__/qq-updates.test.ts apps/electron/src/transport/__tests__/routed-client.test.ts apps/electron/src/transport/__tests__/channel-map-parity.test.ts packages/shared/src/i18n/__tests__/locale-parity.test.ts
+          bun run typecheck:shared
+          bun run typecheck:electron
+      - name: Build and verify release archive
+        run: bun scripts/package-qq-mac.ts --archive
+      - name: Publish to this fork only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(bun -e 'console.log(require("./qq-release.json").version)')
+          TAG="qq-v${VERSION}"
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+            echo 'Tag must match qq-release.json'; exit 1
+          fi
+          if ! git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo 'Release already exists; no published assets will be replaced'; exit 1
+          fi
+          gh release create "$TAG" --verify-tag --draft --title "Craft Agents QQ ${VERSION}" --notes-file docs/qq-release-notes.md
+          gh release upload "$TAG" "apps/electron/release/qq/Craft-Agents-QQ-${VERSION}-arm64.zip" apps/electron/release/qq/SHA256SUMS.txt
+          gh release edit "$TAG" --draft=false --prerelease=false

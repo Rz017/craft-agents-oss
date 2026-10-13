@@ -61,6 +61,7 @@ const consoleLogger: MessagingLogger = {
 }
 
 export interface MessagingGatewayRegistryOptions {
+  storeAttachment?: import('./types').StoreMessagingAttachment
   sessionManager: ISessionManager
   credentialManager: CredentialManager
   /** Absolute path to the messaging storage directory for the given workspace. */
@@ -1046,6 +1047,7 @@ export class MessagingGatewayRegistry implements IMessagingGatewayRegistry {
     )
     const cfg = configStore.get()
     const gateway = new MessagingGateway({
+      storeAttachment: this.opts.storeAttachment,
       sessionManager: this.opts.sessionManager,
       workspaceId,
       storageDir,

@@ -2,12 +2,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { parse } from 'yaml'
 
 if (process.platform !== 'darwin' || process.arch !== 'arm64') {
   throw new Error('This packaging entry point targets Apple Silicon macOS')
 }
 const root = join(import.meta.dir, '..')
+const { version } = JSON.parse(readFileSync(join(root, 'qq-release.json'), 'utf8')) as { version: string }
+if (!/^\d+\.\d+\.\d+-qq\.\d+$/.test(version)) throw new Error('Invalid version in qq-release.json')
 const appDir = join(root, 'apps', 'electron')
 const output = join(appDir, 'release', 'qq')
 const bun = existsSync(join(root, '.local-tools', 'bun')) ? join(root, '.local-tools', 'bun') : process.execPath
@@ -47,7 +50,7 @@ writeFileSync(configPath, JSON.stringify({
   electronDist: join(dependencies, 'electron', 'dist'),
   npmRebuild: false,
   publish: null,
-  extraMetadata: { ...baseConfig.extraMetadata, name: 'craft-agents-qq', productName: 'Craft Agents QQ', craftCustomBuild: 'qq' },
+  extraMetadata: { ...baseConfig.extraMetadata, version, name: 'craft-agents-qq', productName: 'Craft Agents QQ', craftCustomBuild: 'qq' },
   mac: {
     ...baseConfig.mac,
     identity: '-',
@@ -57,3 +60,10 @@ writeFileSync(configPath, JSON.stringify({
 }, null, 2))
 run(join(dependencies, '.bin', 'electron-builder'), ['--config', configPath, '--mac', '--arm64', '--dir', '--publish', 'never'], appDir)
 console.log(`Built App: ${join(output, 'mac-arm64', 'Craft Agents QQ.app')}`)
+if (process.argv.includes('--archive')) {
+  const archive = join(output, `Craft-Agents-QQ-${version}-arm64.zip`)
+  run('codesign', ['--verify', '--deep', '--strict', join(output, 'mac-arm64', 'Craft Agents QQ.app')])
+  run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', join(output, 'mac-arm64', 'Craft Agents QQ.app'), archive])
+  writeFileSync(join(output, 'SHA256SUMS.txt'), `${createHash('sha256').update(readFileSync(archive)).digest('hex')}  ${archive.split('/').at(-1)}\n`)
+  console.log(`Release archive: ${archive}`)
+}

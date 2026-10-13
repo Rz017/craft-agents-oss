@@ -784,6 +784,9 @@ export interface UpdateInfo {
   downloadState: 'idle' | 'downloading' | 'ready' | 'installing' | 'error'
   downloadProgress: number
   error?: string
+  /** QQ builds only notify and open the public release page. */
+  updateMode?: 'manual'
+  releaseUrl?: string
 }
 
 // ---------------------------------------------------------------------------
