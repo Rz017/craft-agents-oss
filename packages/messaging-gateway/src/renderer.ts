@@ -46,7 +46,7 @@ function bindingOpts(binding: ChannelBinding): SendOptions {
   return binding.threadId !== undefined ? { threadId: binding.threadId } : {}
 }
 import type { PlanTokenRegistry } from './plan-tokens'
-import type { QQReplyFile } from './qq-reply-files'
+import { stripQQFileLinks, type QQReplyFile } from './qq-reply-files'
 
 /** Session event shape (subset of the full SessionEvent from server-core). */
 export interface SessionEvent {
@@ -804,8 +804,8 @@ Approve in the desktop app to continue.`,
     text: string,
   ): Promise<SentMessage | undefined> {
     if (adapter.platform === 'qq') {
-      const sent = await adapter.sendText(binding.channelId, text, bindingOpts(binding))
       const files = await this.getReplyFiles?.(binding, text) ?? []
+      const sent = await adapter.sendText(binding.channelId, stripQQFileLinks(text), bindingOpts(binding))
       for (const file of files) {
         try { await adapter.sendFile(binding.channelId, file.buffer, file.filename) }
         catch {

@@ -5,16 +5,33 @@ import { QQ_MAX_ATTACHMENTS, QQ_MAX_FILE_BYTES } from './adapters/qq/attachments
 
 export interface QQReplyFile { buffer: Buffer; filename: string }
 
+const FILE_LINK = /!?\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\s*\)/g
+
+function localFileTarget(raw: string): string | null {
+  let value = raw
+  if (/^file:\/\//i.test(value)) { try { value = new URL(value).pathname } catch { return null } }
+  else if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[a-z]:[\\/]/i.test(value)) return null
+  try { return decodeURIComponent(value).replace(/:\d+$/, '') } catch { return null }
+}
+
+/** QQ plain text cannot open local links; keep the label and send the file separately. */
+export function stripQQFileLinks(text: string): string {
+  return text.replace(FILE_LINK, (match, label: string, angle: string | undefined, plain: string | undefined) => {
+    const path = localFileTarget(angle || plain || '')
+    if (path === null) return match
+    const name = label.trim()
+    return name && !isAbsolute(name) ? name : basename(path)
+  })
+}
+
 /** Only explicit file links in the reply, within this session's output/cwd roots. */
 export async function readQQReplyFiles(text: string, roots: string[]): Promise<QQReplyFile[]> {
   const allowed = (await Promise.all(roots.map(root => realpath(root).catch(() => null)))).filter((root): root is string => !!root)
   const files: QQReplyFile[] = []
   const seen = new Set<string>()
-  for (const match of text.matchAll(/!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\s*\)/g)) {
-    let value = match[1] || match[2] || ''
-    if (/^(?:https?:|data:|sandbox:|codex:)/i.test(value)) continue
-    if (value.startsWith('file://')) { try { value = new URL(value).pathname } catch { continue } }
-    try { value = decodeURIComponent(value).replace(/:\d+$/, '') } catch { continue }
+  for (const match of text.matchAll(FILE_LINK)) {
+    const value = localFileTarget(match[2] || match[3] || '')
+    if (value === null) continue
     const candidates = isAbsolute(value) ? [value] : roots.map(root => resolve(root, value))
     for (const candidate of candidates) {
       // Never turn links to hidden configuration or credentials into QQ uploads.

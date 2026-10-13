@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, symlinkSync, mkdirSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { downloadQQAttachment, QQ_MAX_FILE_BYTES, qqAttachmentName, validateQQAttachmentUrl } from '../adapters/qq/attachments'
-import { readQQReplyFiles } from '../qq-reply-files'
+import { readQQReplyFiles, stripQQFileLinks } from '../qq-reply-files'
 
 const dirs: string[] = []
 function tempDir() { const dir = mkdtempSync(join(tmpdir(), 'qq-files-test-')); dirs.push(dir); return dir }
@@ -30,6 +30,10 @@ describe('QQ attachment download boundaries', () => {
 })
 
 describe('QQ outbound reply files', () => {
+  it('shows local attachment names without paths while retaining web links and ordinary command text', () => {
+    const source = '已生成：[连接测试.txt]( /Users/derrick/日常/sessions/test/连接测试.txt)\n![图片](<file:///Users/derrick/report%20image.png>)\n[下载](./report.pdf)\n[官网](https://example.com/docs)\n运行 cd /workspace/project'
+    expect(stripQQFileLinks(source)).toBe('已生成：连接测试.txt\n图片\n下载\n[官网](https://example.com/docs)\n运行 cd /workspace/project')
+  })
   it('reads explicit output links with spaces, deduplicates, and rejects links outside the session roots', async () => {
     const root = tempDir(), outside = tempDir()
     const report = join(root, 'report with spaces.txt')

@@ -293,6 +293,7 @@ describe('QQ pairing, switching and text routing', () => {
     await renderer.handle({ type: 'complete', sessionId: 'a' }, binding, adapter)
     expect(fake.media).toHaveLength(1)
     expect(fake.media[0]?.filename).toBe('report.txt')
+    expect(fake.sent.map(message => message.text)).toEqual(['报告'])
   })
 })
 
