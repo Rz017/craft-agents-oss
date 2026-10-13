@@ -30,6 +30,24 @@
 
 更换不同 App ID 的机器人会清除 QQ 绑定和允许用户列表，因为 QQ OpenID 属于对应机器人应用；随后需要重新配对。
 
+## 远程 Workspace
+
+定制版保留原有「连接远程服务器」入口、WebSocket RPC、服务地址和 Token 认证方式，协议版本仍为 `1.0`。普通远程会话可连接同一基线、协议兼容的官方服务；这不代表任意新旧版本的全部功能都兼容。
+
+远程 Workspace 的消息网关在服务器端运行，桌面端不会为它另起一个本地 QQ 连接。因此，远程 Workspace 要启用 QQ，服务器也必须使用本仓库的 `codex/qq-messaging` 分支。只更新桌面 App、继续运行未包含 QQ 的官方服务，不能为远程 Workspace 添加 QQ。
+
+服务器构建和启动仍使用官方提供的命令，源码来源改为定制分支：
+
+```sh
+git clone --branch codex/qq-messaging https://github.com/Rz017/craft-agents-oss.git craft-agents-qq
+cd craft-agents-qq
+bun install --frozen-lockfile
+# 沿用现有 CRAFT_SERVER_TOKEN、监听地址、TLS 等部署环境配置。
+bun run server:prod
+```
+
+桌面 App 连接该服务器后，在对应远程 Workspace 的 Messaging 设置中配置 QQ 凭据并配对会话。凭据和群聊绑定保存在服务器上；本机 Workspace 的已有凭据和绑定不会自动迁移到远程 Workspace。不要让本机和远程服务同时连接同一个 QQ 机器人。
+
 ## 更新与验证
 
 打包版 `Craft Agents QQ` 自带定制构建标识，始终关闭官方自动下载和安装更新；直接打开 App 不需要环境变量。源码启动器 `Start Craft QQ.command` 则设置 `CRAFT_DISABLE_UPDATES=1`。后续更新通过 Git 合并官方源码并重新打包：
