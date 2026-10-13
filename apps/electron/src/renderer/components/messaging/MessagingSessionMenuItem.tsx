@@ -27,7 +27,7 @@ import { navigate, routes } from '@/lib/navigate'
 import { useMenuComponents } from '@/components/ui/menu-context'
 import { messagingDialogAtom } from '@/atoms/messaging'
 
-export type MessagingPlatform = 'telegram' | 'whatsapp' | 'lark'
+export type MessagingPlatform = 'telegram' | 'whatsapp' | 'lark' | 'qq'
 
 export interface UseMessagingConnectOptions {
   /** Session to bind the pairing code to. */
@@ -75,7 +75,7 @@ export function useMessagingConnect({
           // Telegram + Lark share the "open Settings" path — both use
           // a Settings dialog rather than an inline connect flow.
           navigate(routes.view.settings('messaging'))
-          toast.info(t('toast.telegramNotConfiguredOpenSettings'))
+          toast.info(t(platform === 'qq' ? 'toast.qqNotConfiguredOpenSettings' : 'toast.telegramNotConfiguredOpenSettings'))
         }
         return
       }
@@ -132,6 +132,9 @@ export function MessagingSessionMenuItem(props: MessagingSessionMenuItemProps) {
         </MenuItem>
         <MenuItem onClick={() => handleConnectMessaging('whatsapp')}>
           <span>WhatsApp</span>
+        </MenuItem>
+        <MenuItem onClick={() => handleConnectMessaging('qq')}>
+          <span>QQ</span>
         </MenuItem>
         <MenuItem onClick={() => handleConnectMessaging('lark')}>
           <span>Lark / Feishu</span>

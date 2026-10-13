@@ -47,6 +47,7 @@ function sameRow(a: PendingSender, b: PendingSender): boolean {
 }
 
 interface Props {
+  platform?: 'telegram' | 'qq'
   workspaceId: string
   /** Workspace-level Telegram access mode. Controlled by the parent so the
    *  same source of truth drives the banner, the collapsible subtitle, and
@@ -55,7 +56,7 @@ interface Props {
   onAccessModeChange: (mode: PlatformAccessMode) => void
 }
 
-export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeChange }: Props) {
+export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeChange, platform = 'telegram' }: Props) {
   const { t } = useTranslation()
   const allBindings = useAtomValue(messagingBindingsAtom)
   const [owners, setOwners] = React.useState<PlatformOwner[]>([])
@@ -67,19 +68,19 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
   // operator would see the banner disappear after clicking "Lock down"
   // even though concrete bindings are still letting strangers in.
   const hasOpenBinding = React.useMemo(
-    () => allBindings.some((b) => b.platform === 'telegram' && b.accessMode === 'open'),
-    [allBindings],
+    () => allBindings.some((b) => b.platform === platform && b.accessMode === 'open'),
+    [allBindings, platform],
   )
   const showBanner = accessMode === 'open' || hasOpenBinding
 
   const loadAll = React.useCallback(async () => {
     const [o, p] = await Promise.all([
-      window.electronAPI.getMessagingPlatformOwners('telegram').catch(() => []),
-      window.electronAPI.getMessagingPendingSenders('telegram').catch(() => []),
+      window.electronAPI.getMessagingPlatformOwners(platform).catch(() => []),
+      window.electronAPI.getMessagingPendingSenders(platform).catch(() => []),
     ])
     setOwners(o)
     setPending(p)
-  }, [])
+  }, [platform])
 
   React.useEffect(() => {
     void loadAll()
@@ -97,8 +98,8 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
 
   const handleLockDown = async () => {
     try {
-      await window.electronAPI.setMessagingPlatformAccessMode('telegram', 'owner-only')
-      toast.success(t('toast.messagingTelegramLockedDown'))
+      await window.electronAPI.setMessagingPlatformAccessMode(platform, 'owner-only')
+      toast.success(t(platform === 'qq' ? 'toast.messagingQQLockedDown' : 'toast.messagingTelegramLockedDown'))
       onAccessModeChange('owner-only')
       await loadAll()
     } catch (err) {
@@ -109,7 +110,7 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
   const handleRemoveOwner = async (userId: string) => {
     const next = owners.filter((o) => o.userId !== userId)
     try {
-      await window.electronAPI.setMessagingPlatformOwners('telegram', next)
+      await window.electronAPI.setMessagingPlatformOwners(platform, next)
       setOwners(next)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove owner')
@@ -123,7 +124,7 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
         ...(sender.bindingId ? { bindingId: sender.bindingId } : {}),
       }
       const result = await window.electronAPI.allowMessagingPendingSender(
-        'telegram',
+        platform,
         sender.userId,
         entryKey,
       )
@@ -143,7 +144,7 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
   const handleIgnore = async (sender: PendingSender) => {
     try {
       await window.electronAPI.dismissMessagingPendingSender(
-        'telegram',
+        platform,
         sender.userId,
         {
           ...(sender.reason ? { reason: sender.reason } : {}),
@@ -167,7 +168,7 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
           {...(accessMode === 'owner-only' && hasOpenBinding
             ? {
                 description: t(
-                  'settings.messaging.telegram.access.banner.descriptionLegacyBinding',
+                  `settings.messaging.${platform}.access.banner.descriptionLegacyBinding`,
                 ),
               }
             : {})}
@@ -176,6 +177,7 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
 
       <SectionDivider />
       <AllowedUsersCollapsible
+        platform={platform}
         owners={owners}
         accessMode={accessMode}
         onRemove={handleRemoveOwner}
@@ -185,8 +187,8 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
         <>
           <SectionDivider />
           <SectionHeader
-            title={t('settings.messaging.telegram.access.pendingRequestsTitle')}
-            subtitle={t('settings.messaging.telegram.access.pendingRequestsSubtitle', {
+            title={t(`settings.messaging.${platform}.access.pendingRequestsTitle`)}
+            subtitle={t(`settings.messaging.${platform}.access.pendingRequestsSubtitle`, {
               count: pending.length,
             })}
           />
@@ -207,10 +209,12 @@ export function TelegramAccessSection({ workspaceId, accessMode, onAccessModeCha
 // ---------------------------------------------------------------------------
 
 function AllowedUsersCollapsible({
+  platform,
   owners,
   accessMode,
   onRemove,
 }: {
+  platform: 'telegram' | 'qq'
   owners: PlatformOwner[]
   accessMode: PlatformAccessMode
   onRemove: (userId: string) => void
@@ -223,10 +227,10 @@ function AllowedUsersCollapsible({
 
   const subtitle =
     accessMode === 'open'
-      ? t('settings.messaging.telegram.access.allowedUsersSubtitleOpen')
+      ? t(`settings.messaging.${platform}.access.allowedUsersSubtitleOpen`)
       : owners.length === 0
-        ? t('settings.messaging.telegram.access.allowedUsersSubtitleEmpty')
-        : t('settings.messaging.telegram.access.allowedUsersSubtitle', { count: owners.length })
+        ? t(`settings.messaging.${platform}.access.allowedUsersSubtitleEmpty`)
+        : t(`settings.messaging.${platform}.access.allowedUsersSubtitle`, { count: owners.length })
 
   return (
     <div>
@@ -238,7 +242,7 @@ function AllowedUsersCollapsible({
         <SubRowIcon icon={Users} />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">
-            {t('settings.messaging.telegram.access.allowedUsersTitle')}
+            {t(`settings.messaging.${platform}.access.allowedUsersTitle`)}
           </div>
           <div className="mt-0.5 truncate text-xs text-foreground/50">{subtitle}</div>
         </div>
@@ -260,6 +264,7 @@ function AllowedUsersCollapsible({
           >
             <div className="border-t border-border/50">
               <OwnersListEditor
+                emptyKey={`settings.messaging.${platform}.access.owners.empty`}
                 owners={owners}
                 enforced={accessMode === 'owner-only'}
                 onRemove={onRemove}

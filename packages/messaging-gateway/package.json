@@ -18,6 +18,7 @@
     "@craft-agent/server-core": "workspace:*",
     "@craft-agent/shared": "workspace:*",
     "@larksuiteoapi/node-sdk": "^1.62.1",
+    "@tencent-connect/qqbot-nodejs": "1.0.4",
     "grammy": "^1.35.0"
   },
   "devDependencies": {

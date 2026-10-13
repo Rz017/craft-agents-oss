@@ -20,7 +20,7 @@ import { IconButton } from '@/components/ui/button'
 interface PairingCodeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  platform: 'telegram' | 'whatsapp' | 'lark'
+  platform: 'telegram' | 'whatsapp' | 'lark' | 'qq'
   code: string | null
   expiresAt: number | null
   /** Bot username (without @) — enables the "Open bot" deep link. */

@@ -33,6 +33,8 @@ import type { EventSink } from '@craft-agent/server-core/transport'
 const PLATFORM = platform()
 const IS_MAC = PLATFORM === 'darwin'
 const IS_WINDOWS = PLATFORM === 'win32'
+// Custom builds update by merging upstream and rebuilding, preserving added channels.
+const UPDATES_DISABLED = process.env.CRAFT_DISABLE_UPDATES === '1'
 
 // Get the update cache directory path (for file watcher fallback on macOS)
 // electron-updater uses these paths:
@@ -155,10 +157,10 @@ function broadcastDownloadProgress(progress: number): void {
 // ─── Configure electron-updater ───────────────────────────────────────────────
 
 // Auto-download updates in the background after detection
-autoUpdater.autoDownload = true
+autoUpdater.autoDownload = !UPDATES_DISABLED
 
 // Install on app quit (if update is downloaded but user hasn't clicked "Restart")
-autoUpdater.autoInstallOnAppQuit = true
+autoUpdater.autoInstallOnAppQuit = !UPDATES_DISABLED
 
 // Use the logger for electron-updater internal logging
 autoUpdater.logger = {
@@ -357,6 +359,7 @@ function checkForExistingDownload(): { exists: boolean; version?: string } {
  * @param options.autoDownload - If false, only checks without downloading (for manual "Check Now")
  */
 export async function checkForUpdates(options: CheckOptions = {}): Promise<UpdateInfo> {
+  if (UPDATES_DISABLED) return updateInfo
   const { autoDownload = true } = options
 
   // Temporarily override autoDownload for this check if needed
@@ -412,6 +415,7 @@ export async function checkForUpdates(options: CheckOptions = {}): Promise<Updat
  * Then relaunches the app automatically.
  */
 export async function installUpdate(): Promise<void> {
+  if (UPDATES_DISABLED) throw new Error('Automatic updates are disabled for this custom build. Merge upstream and rebuild to update.')
   if (updateInfo.downloadState !== 'ready') {
     throw new Error('No update ready to install')
   }

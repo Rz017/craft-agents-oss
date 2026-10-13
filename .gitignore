@@ -73,3 +73,8 @@ credentials.enc
 # act (local GitHub Actions runner)
 .secrets
 .actrc
+
+# Local QQ build runtime and previews
+.local-tools/
+.qq-profile/
+.qq-preview/

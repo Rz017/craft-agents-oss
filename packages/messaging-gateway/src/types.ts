@@ -9,7 +9,7 @@
 // Platform types
 // ---------------------------------------------------------------------------
 
-export type PlatformType = 'telegram' | 'whatsapp' | 'lark'
+export type PlatformType = 'telegram' | 'whatsapp' | 'lark' | 'qq'
 
 // ---------------------------------------------------------------------------
 // Logger
@@ -70,7 +70,7 @@ export interface AdapterCapabilities {
   inlineButtons: boolean
   maxButtons: number
   maxMessageLength: number
-  markdown: 'v2' | 'whatsapp' | 'lark-post'
+  markdown: 'v2' | 'whatsapp' | 'lark-post' | 'plain'
   webhookSupport: boolean
 }
 
@@ -301,7 +301,8 @@ export const DEFAULT_BINDING_CONFIG: BindingConfig = {
 export function getDefaultBindingConfig(platform: PlatformType): BindingConfig {
   return {
     ...DEFAULT_BINDING_CONFIG,
-    approvalChannel: platform === 'whatsapp' ? 'app' : DEFAULT_BINDING_CONFIG.approvalChannel,
+    approvalChannel: platform === 'whatsapp' || platform === 'qq' ? 'app' : DEFAULT_BINDING_CONFIG.approvalChannel,
+    ...(platform === 'qq' ? { responseMode: 'final_only' as const, streamResponses: false } : {}),
   }
 }
 
@@ -463,6 +464,12 @@ export interface PendingSender {
 export interface MessagingConfig {
   enabled: boolean
   platforms: {
+    qq?: {
+      enabled: boolean
+      appId?: string
+      accessMode?: PlatformAccessMode
+      owners?: PlatformOwner[]
+    }
     telegram?: {
       enabled: boolean
       /**

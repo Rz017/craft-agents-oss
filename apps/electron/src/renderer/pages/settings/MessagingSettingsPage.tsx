@@ -48,6 +48,7 @@ import {
 import { SettingsPage, SettingsCard, SettingsCardDivider } from '@/components/settings'
 import { MessagingPlatformIcon } from '@/components/messaging/MessagingPlatformIcon'
 import { TelegramConnectDialog } from '@/components/messaging/TelegramConnectDialog'
+import { QQConnectDialog } from '@/components/messaging/QQConnectDialog'
 import { LarkConnectDialog } from '@/components/messaging/LarkConnectDialog'
 import { TelegramSupergroupPairingDialog } from '@/components/messaging/TelegramSupergroupPairingDialog'
 import { WhatsAppConnectDialog } from '@/components/messaging/WhatsAppConnectDialog'
@@ -120,6 +121,9 @@ export default function MessagingSettingsPage() {
         <SettingsCard>
           <PlatformRow platform="lark" workspaceId={activeWorkspace.id} />
         </SettingsCard>
+        <SettingsCard>
+          <PlatformRow platform="qq" workspaceId={activeWorkspace.id} />
+        </SettingsCard>
       </div>
     </SettingsPage>
   )
@@ -129,12 +133,13 @@ export default function MessagingSettingsPage() {
 // Platform row
 // ---------------------------------------------------------------------------
 
-type Platform = 'telegram' | 'whatsapp' | 'lark'
+type Platform = 'telegram' | 'whatsapp' | 'lark' | 'qq'
 
 const PLATFORM_LABEL_KEYS: Record<Platform, string> = {
   telegram: 'settings.messaging.telegram.title',
   whatsapp: 'settings.messaging.whatsapp.title',
   lark: 'settings.messaging.lark.title',
+  qq: 'settings.messaging.qq.title',
 }
 
 // Row column geometry shared across the bot header and all child rows.
@@ -202,7 +207,7 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
   // dropdown can decide whether to show "Unlock", and TelegramAccessSection
   // receives it as a controlled prop. Symmetric with `supergroup` state.
   const [telegramAccessMode, setTelegramAccessMode] =
-    React.useState<PlatformAccessMode>('open')
+    React.useState<PlatformAccessMode>(platform === 'qq' ? 'owner-only' : 'open')
 
   const refreshSupergroup = React.useCallback(async () => {
     if (platform !== 'telegram') return
@@ -215,9 +220,9 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
   }, [platform])
 
   const refreshTelegramAccessMode = React.useCallback(async () => {
-    if (platform !== 'telegram') return
+    if (platform !== 'telegram' && platform !== 'qq') return
     try {
-      const mode = await window.electronAPI.getMessagingPlatformAccessMode('telegram')
+      const mode = await window.electronAPI.getMessagingPlatformAccessMode(platform)
       setTelegramAccessMode(mode as PlatformAccessMode)
     } catch {
       // silent — default 'open' covers fresh / disconnected state
@@ -229,7 +234,7 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
   }, [refreshSupergroup, workspaceId])
 
   React.useEffect(() => {
-    if (platform !== 'telegram') return
+    if (platform !== 'telegram' && platform !== 'qq') return
     void refreshTelegramAccessMode()
     // Lock-down migrates open bindings → inherit, which fires
     // onMessagingBindingChanged. Unlock doesn't migrate, but PlatformRow
@@ -285,8 +290,8 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
 
   const handleUnlock = async () => {
     try {
-      await window.electronAPI.setMessagingPlatformAccessMode('telegram', 'open')
-      toast.success(t('toast.messagingTelegramUnlocked'))
+      await window.electronAPI.setMessagingPlatformAccessMode(platform, 'open')
+      toast.success(t(platform === 'qq' ? 'toast.messagingQQUnlocked' : 'toast.messagingTelegramUnlocked'))
       setTelegramAccessMode('open')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('common.error'))
@@ -351,7 +356,7 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
                 />
               </DropdownMenuTrigger>
               <StyledDropdownMenuContent align="end">
-                {platform === 'telegram' ? (
+                {platform === 'telegram' || platform === 'qq' ? (
                   <>
                     <StyledDropdownMenuItem onClick={() => runAfterMenuClose(handleReconfigure)}>
                       <Settings2 className="h-3.5 w-3.5" />
@@ -396,6 +401,9 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
           )}
         </div>
 
+        {platform === 'qq' && runtime.connected && (
+          <TelegramAccessSection platform="qq" workspaceId={workspaceId} accessMode={telegramAccessMode} onAccessModeChange={setTelegramAccessMode} />
+        )}
         {platform === 'telegram' && runtime.connected ? (
           <>
             <TelegramAccessSection
@@ -460,6 +468,9 @@ function PlatformRow({ platform, workspaceId }: { platform: Platform; workspaceI
       )}
       {platform === 'whatsapp' && (
         <WhatsAppConnectDialog open={connectOpen} onOpenChange={setConnectOpen} />
+      )}
+      {platform === 'qq' && (
+        <QQConnectDialog open={connectOpen} onOpenChange={setConnectOpen} reconfigure={reconfigure} />
       )}
       {platform === 'lark' && (
         <LarkConnectDialog open={connectOpen} onOpenChange={setConnectOpen} reconfigure={reconfigure} />

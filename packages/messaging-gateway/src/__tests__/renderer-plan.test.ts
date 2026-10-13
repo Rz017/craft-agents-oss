@@ -44,6 +44,7 @@ function makeAdapter(platform: PlatformType = 'telegram'): PlatformAdapter & { c
   const markdownByPlatform: Record<PlatformType, AdapterCapabilities['markdown']> = {
     telegram: 'v2',
     lark: 'lark-post',
+    qq: 'plain',
     whatsapp: 'whatsapp',
   }
   const caps: AdapterCapabilities = {

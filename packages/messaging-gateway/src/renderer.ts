@@ -610,7 +610,7 @@ export class Renderer {
       state.lastEditedLength = 0
     }
 
-    if (binding.platform === 'whatsapp') {
+    if (binding.platform === 'whatsapp' || binding.platform === 'qq') {
       await adapter.sendText(
         binding.channelId,
         `⏸ Permission required: ${request.description}
@@ -642,7 +642,7 @@ Approve in the desktop app to continue.`,
     binding: ChannelBinding,
     adapter: PlatformAdapter,
   ): Promise<void> {
-    if (binding.platform !== 'whatsapp') return
+    if (binding.platform !== 'whatsapp' && binding.platform !== 'qq') return
     await adapter.sendText(
       binding.channelId,
       '🔐 Credentials are required to continue. Open the desktop app to review and submit them securely.',
@@ -656,7 +656,7 @@ Approve in the desktop app to continue.`,
     adapter: PlatformAdapter,
   ): Promise<void> {
     // WhatsApp: no interactive buttons yet — keep the generic pointer.
-    if (binding.platform === 'whatsapp') {
+    if (binding.platform === 'whatsapp' || binding.platform === 'qq') {
       await adapter.sendText(
         binding.channelId,
         '📝 A plan is ready for review. Open the desktop app to inspect and approve it.',
@@ -799,6 +799,7 @@ Approve in the desktop app to continue.`,
     binding: ChannelBinding,
     text: string,
   ): Promise<SentMessage | undefined> {
+    if (adapter.platform === 'qq') return adapter.sendText(binding.channelId, text, bindingOpts(binding))
     const maxLen = adapter.capabilities.maxMessageLength
     const opts = bindingOpts(binding)
     if (text.length <= maxLen) {

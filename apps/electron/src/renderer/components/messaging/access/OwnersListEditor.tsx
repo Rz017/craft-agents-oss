@@ -25,6 +25,7 @@ import type { PlatformOwner } from './types'
 const ROW_ICON_SLOT_PX = 22
 
 interface Props {
+  emptyKey?: string
   owners: PlatformOwner[]
   /** Whether the gateway is gating on this list. When false, the list is shown
    *  as informational and the "Lock down" CTA is the primary action elsewhere. */
@@ -40,14 +41,14 @@ function IconSpacer() {
   return <div className="shrink-0" style={{ width: ROW_ICON_SLOT_PX, height: ROW_ICON_SLOT_PX }} />
 }
 
-export function OwnersListEditor({ owners, enforced, onRemove, currentUserId }: Props) {
+export function OwnersListEditor({ owners, enforced, onRemove, currentUserId, emptyKey = 'settings.messaging.telegram.access.owners.empty' }: Props) {
   if (owners.length === 0) {
     return (
       <div className="flex items-start gap-3 px-4 py-3 text-xs text-foreground/50">
         <IconSpacer />
         <span>
           <Trans
-            i18nKey="settings.messaging.telegram.access.owners.empty"
+            i18nKey={emptyKey}
             components={{
               code: <code className="rounded bg-foreground/[0.06] px-1 py-0.5" />,
             }}

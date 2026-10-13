@@ -768,6 +768,8 @@ export interface ElectronAPI {
   testTelegramToken(token: string): Promise<{ success: boolean; botName?: string; botUsername?: string; error?: string }>
   saveTelegramToken(token: string): Promise<void>
   testLarkCredentials(creds: { appId: string; appSecret: string; domain: 'lark' | 'feishu' }): Promise<{ success: boolean; botName?: string; error?: string }>
+  testQQCredentials(creds: { appId: string; appSecret: string }): Promise<{ success: boolean; error?: string }>
+  saveQQCredentials(creds: { appId: string; appSecret: string }): Promise<void>
   saveLarkCredentials(creds: { appId: string; appSecret: string; domain: 'lark' | 'feishu' }): Promise<void>
   disconnectMessagingPlatform(platform: string): Promise<void>
   forgetMessagingPlatform(platform: string): Promise<void>

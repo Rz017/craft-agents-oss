@@ -34,7 +34,7 @@ type WhatsAppEventListener = (payload: { workspaceId: string; event: WhatsAppUiE
 
 const PLAYGROUND_WORKSPACE_ID = 'playground-workspace'
 
-type AllowListPlatform = 'telegram' | 'whatsapp' | 'lark'
+type AllowListPlatform = 'telegram' | 'whatsapp' | 'lark' | 'qq'
 
 interface AllowListState {
   accessMode: PlatformAccessMode
@@ -48,6 +48,7 @@ interface MessagingMockState {
   runtime: {
     telegram: MessagingPlatformRuntimeInfo
     whatsapp: MessagingPlatformRuntimeInfo
+    qq: MessagingPlatformRuntimeInfo
   }
   bindings: MessagingBinding[]
   /** Workspace-level allow-list state per platform (Phase 1 mock surface). */
@@ -57,7 +58,7 @@ interface MessagingMockState {
   waEventListeners: Set<WhatsAppEventListener>
 }
 
-function defaultRuntime(platform: 'telegram' | 'whatsapp'): MessagingPlatformRuntimeInfo {
+function defaultRuntime(platform: 'telegram' | 'whatsapp' | 'qq'): MessagingPlatformRuntimeInfo {
   return {
     platform,
     configured: false,
@@ -75,19 +76,21 @@ const messagingMockState: MessagingMockState = {
   runtime: {
     telegram: defaultRuntime('telegram'),
     whatsapp: defaultRuntime('whatsapp'),
+    qq: defaultRuntime('qq'),
   },
   bindings: [],
   allowList: {
     telegram: defaultAllowList(),
     whatsapp: defaultAllowList(),
     lark: defaultAllowList(),
+    qq: { ...defaultAllowList(), accessMode: 'owner-only' },
   },
   platformStatusListeners: new Set(),
   bindingListeners: new Set(),
   waEventListeners: new Set(),
 }
 
-function emitPlatformStatus(platform: 'telegram' | 'whatsapp') {
+function emitPlatformStatus(platform: 'telegram' | 'whatsapp' | 'qq') {
   const status = messagingMockState.runtime[platform]
   for (const listener of messagingMockState.platformStatusListeners) {
     try { listener(PLAYGROUND_WORKSPACE_ID, platform, status) } catch (err) { console.error(err) }
@@ -110,6 +113,7 @@ export interface PlaygroundMessagingHandle {
   /** Snapshot of current state (for debugging from DevTools). */
   state: MessagingMockState
   setTelegramConnected: (connected: boolean, identity?: string) => void
+  setQQConnected: (connected: boolean) => void
   setWhatsAppConnected: (connected: boolean, identity?: string) => void
   setBindings: (bindings: MessagingBinding[]) => void
   fireWAEvent: (event: WhatsAppUiEvent) => void
@@ -146,6 +150,10 @@ export const playgroundMessagingHandle: PlaygroundMessagingHandle = {
     }
     emitPlatformStatus('telegram')
   },
+  setQQConnected(connected) {
+    messagingMockState.runtime.qq = { ...defaultRuntime('qq'), configured: connected, connected, state: connected ? 'connected' : 'disconnected' }
+    emitPlatformStatus('qq')
+  },
   setWhatsAppConnected(connected, identity) {
     messagingMockState.runtime.whatsapp = {
       platform: 'whatsapp',
@@ -171,8 +179,11 @@ export const playgroundMessagingHandle: PlaygroundMessagingHandle = {
     messagingMockState.allowList.telegram = defaultAllowList()
     messagingMockState.allowList.whatsapp = defaultAllowList()
     messagingMockState.allowList.lark = defaultAllowList()
+    messagingMockState.allowList.qq = { ...defaultAllowList(), accessMode: 'owner-only' }
     emitPlatformStatus('telegram')
+    messagingMockState.runtime.qq = defaultRuntime('qq')
     emitPlatformStatus('whatsapp')
+    emitPlatformStatus('qq')
     emitBindingChanged()
   },
 }
@@ -194,6 +205,7 @@ export const playgroundAllowListHandle: PlaygroundAllowListHandle = {
     messagingMockState.allowList.telegram = defaultAllowList()
     messagingMockState.allowList.whatsapp = defaultAllowList()
     messagingMockState.allowList.lark = defaultAllowList()
+    messagingMockState.allowList.qq = { ...defaultAllowList(), accessMode: 'owner-only' }
   },
 }
 
@@ -451,10 +463,12 @@ export const mockElectronAPI = {
       platforms: {
         telegram: { enabled: true },
         whatsapp: { enabled: true },
+        qq: { enabled: true },
       },
       runtime: {
         telegram: messagingMockState.runtime.telegram,
         whatsapp: messagingMockState.runtime.whatsapp,
+        qq: messagingMockState.runtime.qq,
       },
     }
   },
@@ -477,14 +491,19 @@ export const mockElectronAPI = {
     playgroundMessagingHandle.setTelegramConnected(true, 'Playground Bot')
   },
 
+  testQQCredentials: async (creds: { appId: string; appSecret: string }) => ({ success: /^\d+$/.test(creds.appId) && Boolean(creds.appSecret) }),
+  saveQQCredentials: async () => { playgroundMessagingHandle.setQQConnected(true) },
+
   disconnectMessagingPlatform: async (platform: string) => {
     console.log('[Playground] disconnectMessagingPlatform called:', platform)
+    if (platform === 'qq') playgroundMessagingHandle.setQQConnected(false)
     if (platform === 'telegram') playgroundMessagingHandle.setTelegramConnected(false)
     if (platform === 'whatsapp') playgroundMessagingHandle.setWhatsAppConnected(false)
   },
 
   forgetMessagingPlatform: async (platform: string) => {
     console.log('[Playground] forgetMessagingPlatform called:', platform)
+    if (platform === 'qq') playgroundMessagingHandle.setQQConnected(false)
     if (platform === 'telegram') playgroundMessagingHandle.setTelegramConnected(false)
     if (platform === 'whatsapp') playgroundMessagingHandle.setWhatsAppConnected(false)
     // Drop bindings for that platform
