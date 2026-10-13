@@ -4,7 +4,7 @@
 
 ## 启动与连接
 
-1. 退出其他 Craft Agents 实例，双击仓库根目录的 `Start Craft QQ.command`。它运行当前源码构建，并使用 Craft 原有的数据目录；首次启动时如有设置向导，按界面完成。
+1. 退出其他 Craft Agents 实例，打开 `/Applications/Craft Agents QQ.app`。它与原版 App 并存，使用 Craft 原有的数据目录、凭据和 Workspace。开发时也可以双击仓库根目录的 `Start Craft QQ.command` 运行源码构建。
 2. 在 QQ 开放平台 `https://q.qq.com/` 创建官方机器人，取得 App ID、App Secret，开启所需的群聊/单聊能力并选择 WebSocket 消息接收。群聊可用范围以机器人控制台的测试配置、权限和发布状态为准。
 3. 在目标 Workspace 的设置 → Messaging → QQ 中输入凭据，验证后保存。凭据进入 Craft 现有凭据存储，普通 messaging 配置只保存 App ID 和连接/访问设置。
 4. 将机器人加入目标群。在 Craft 对话菜单选择「连接消息平台 → QQ」，在该群中 `@机器人 /pair 六位配对码`。
@@ -32,14 +32,16 @@
 
 ## 更新与验证
 
-`Start Craft QQ.command` 设置 `CRAFT_DISABLE_UPDATES=1`，阻止官方自动更新覆盖当前定制功能。其他启动方式如需相同行为，也应设置此环境变量。后续更新通过 Git 合并官方源码并重新构建：
+打包版 `Craft Agents QQ` 自带定制构建标识，始终关闭官方自动下载和安装更新；直接打开 App 不需要环境变量。源码启动器 `Start Craft QQ.command` 则设置 `CRAFT_DISABLE_UPDATES=1`。后续更新通过 Git 合并官方源码并重新打包：
 
 ```sh
 git fetch origin
 git merge origin/main
 PATH="$PWD/.local-tools:$PWD/node_modules/.bin:$PATH" bun install --frozen-lockfile
-PATH="$PWD/.local-tools:$PWD/node_modules/.bin:$PATH" bun run electron:build
+PATH="$PWD/.local-tools:$PWD/node_modules/.bin:$PATH" bun scripts/package-qq-mac.ts
 ```
+
+打包脚本面向 Apple Silicon macOS，在 `apps/electron/release/qq/mac-arm64/Craft Agents QQ.app` 生成本地签名的独立 App，不上传发布。内置 Bun、AI 子进程及所需工具资源，运行时无需仓库路径。退出正在运行的定制 App 后，可将新的 App 复制到 `/Applications/Craft Agents QQ.app`；保留 `/Applications/Craft Agents.app` 原版。两版共用 Craft 数据与服务锁，切换时先退出当前运行的一版。
 
 验证命令：
 

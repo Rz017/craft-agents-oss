@@ -28,13 +28,14 @@ import {
 import { readJsonFileSync } from '@craft-agent/shared/utils/files'
 import { RPC_CHANNELS, type UpdateInfo } from '../shared/types'
 import type { EventSink } from '@craft-agent/server-core/transport'
+import { isQQCustomBuild } from './custom-build'
 
 // Platform detection
 const PLATFORM = platform()
 const IS_MAC = PLATFORM === 'darwin'
 const IS_WINDOWS = PLATFORM === 'win32'
 // Custom builds update by merging upstream and rebuilding, preserving added channels.
-const UPDATES_DISABLED = process.env.CRAFT_DISABLE_UPDATES === '1'
+const UPDATES_DISABLED = isQQCustomBuild || process.env.CRAFT_DISABLE_UPDATES === '1'
 
 // Get the update cache directory path (for file watcher fallback on macOS)
 // electron-updater uses these paths:
