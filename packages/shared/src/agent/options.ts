@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from
 import { debug } from "../utils/debug";
 import { getProxyEnvVars } from "../config/proxy-env.ts";
 import { getGitBashPath } from "../config/storage.ts";
+import { AUTO_COMPACT_PERCENT } from './compaction-policy.ts';
 
 declare const CRAFT_AGENT_CLI_VERSION: string | undefined;
 
@@ -190,6 +191,10 @@ export function buildClaudeSubprocessEnv(
         ...process.env,
         ...getProxyEnvVars(),
         ...envOverrides,
+        // Claude's supported runtime controls apply before the SDK starts.
+        // The 1M auto-compact window is capped by the selected model's capacity.
+        CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: String(AUTO_COMPACT_PERCENT),
+        CLAUDE_CODE_AUTO_COMPACT_WINDOW: '1000000',
         // Propagate debug mode from argv flag OR existing env var
         CRAFT_DEBUG: (process.argv.includes('--debug') || process.env.CRAFT_DEBUG === '1') ? '1' : '0',
     };

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SettingsManager } from '@earendil-works/pi-coding-agent';
+import { shouldCompact } from '../../../node_modules/@earendil-works/pi-coding-agent/dist/core/compaction/compaction.js';
 import {
   CRAFT_PI_EPHEMERAL_MAX_BACKOFF_MS,
   CRAFT_PI_EPHEMERAL_QUERY_DEADLINE_MS,
@@ -59,6 +60,21 @@ describe('createCraftSettingsManager', () => {
 
   it('keeps auto-compaction enabled', () => {
     expect(createCraftSettingsManager().getCompactionEnabled()).toBe(true);
+  });
+
+  it('compacts above 70 percent of each selected model capacity, including model switches', () => {
+    const settings = createCraftSettingsManager();
+    for (const window of [1_000_000, 200_000, 131_072, 8192]) {
+      const model = { id: `model-${window}`, provider: 'test', contextWindow: window } as any;
+      const policy = settings.getCompactionSettings(model);
+      const threshold = Math.floor(window * 70 / 100);
+      expect(shouldCompact(threshold, window, policy)).toBe(false);
+      expect(shouldCompact(threshold + 1, window, policy)).toBe(true);
+      expect(policy.keepRecentTokens).toBeLessThan(threshold);
+    }
+    expect(settings.getCompactionSettings({ contextWindow: 1_000_000 } as any).keepRecentTokens).toBe(20_000);
+    expect(settings.getCompactionSettings().reserveTokens).toBe(16_384);
+    expect(settings.getCompactionSettings({ contextWindow: NaN } as any).reserveTokens).toBe(16_384);
   });
 
   it('warms the prompt cache during chat runs but never for one-shot utility sessions', () => {

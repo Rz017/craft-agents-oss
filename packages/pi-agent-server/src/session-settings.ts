@@ -22,6 +22,7 @@
  */
 import { SettingsManager } from '@earendil-works/pi-coding-agent';
 import { LLM_QUERY_TIMEOUT_MS } from '../../shared/src/agent/llm-tool.ts';
+import { compactionReserveTokens } from '../../shared/src/agent/compaction-policy.ts';
 
 type PiSettings = NonNullable<Parameters<typeof SettingsManager.inMemory>[0]>;
 
@@ -123,5 +124,19 @@ export function buildCraftPiSettings(purpose: CraftPiSessionPurpose = 'main'): P
 export function createCraftSettingsManager(
   purpose: CraftPiSessionPurpose = 'main',
 ): SettingsManager {
-  return SettingsManager.inMemory(buildCraftPiSettings(purpose), { projectTrusted: false });
+  const settings = SettingsManager.inMemory(buildCraftPiSettings(purpose), { projectTrusted: false });
+  const defaultReserveTokens = settings.getCompactionReserveTokens.bind(settings);
+  const defaultKeepRecentTokens = settings.getCompactionKeepRecentTokens.bind(settings);
+  // Resolve on every check: catalog models, custom endpoints and model switches
+  // all use their actual capacity. Keep the SDK fallback before a model exists.
+  settings.getCompactionReserveTokens = model =>
+    compactionReserveTokens(model?.contextWindow ?? 0) ?? defaultReserveTokens(model);
+  // A small custom model must leave some history available to summarize.
+  settings.getCompactionKeepRecentTokens = model => {
+    const defaultValue = defaultKeepRecentTokens(model);
+    return compactionReserveTokens(model?.contextWindow ?? 0) === undefined
+      ? defaultValue
+      : Math.min(defaultValue, Math.floor(model!.contextWindow * 0.2));
+  };
+  return settings;
 }

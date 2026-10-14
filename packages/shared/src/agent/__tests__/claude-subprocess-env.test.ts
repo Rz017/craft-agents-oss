@@ -9,6 +9,11 @@ afterEach(() => {
 });
 
 describe('buildClaudeSubprocessEnv', () => {
+  it('applies the 70 percent compaction policy to SDK sessions before launch', () => {
+    const env = buildClaudeSubprocessEnv({ CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '98', CLAUDE_CODE_AUTO_COMPACT_WINDOW: '200000' });
+    expect(env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBe('70');
+    expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe('1000000');
+  });
   it('keeps the task-tracking tools available on every model (SDK 0.3.268 default change)', () => {
     delete process.env.CLAUDE_CODE_ENABLE_TODO_TOOLS;
     expect(buildClaudeSubprocessEnv().CLAUDE_CODE_ENABLE_TODO_TOOLS).toBe('1');

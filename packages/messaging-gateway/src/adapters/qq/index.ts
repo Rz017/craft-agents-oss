@@ -139,8 +139,9 @@ export class QQAdapter implements PlatformAdapter {
 
   private async receive(msg: QQBotInboundMessage): Promise<void> {
     if (msg.senderIsBot || (msg.kind !== 'c2c' && msg.kind !== 'group')) return
-    // Only explicit @mentions trigger group work. Never ingest ambient group traffic.
-    if (msg.kind === 'group' && msg.rawEventType !== 'GROUP_AT_MESSAGE_CREATE') return
+    // QQ controls each group's delivery scope. Accept both official group modes;
+    // Router still applies pairing and the configured sender access policy.
+    if (msg.kind === 'group' && !['GROUP_AT_MESSAGE_CREATE', 'GROUP_MESSAGE_CREATE'].includes(msg.rawEventType)) return
     const text = msg.content.replace(/^\s*<@!?\d+>\s*/, '').trim()
     const attachments = msg.attachments ?? []
     const signal = this.abort?.signal

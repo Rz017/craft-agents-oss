@@ -1,4 +1,4 @@
-/** Offline checks against the actual Pi bundle, relocated away from repository dependencies. */
+/** Offline image and compaction checks against the actual relocated Pi bundle. */
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -30,12 +30,24 @@ try {
   // This build is intentionally not minified. Append a test-only probe in the
   // bundle's scope so both model-input processing and the real Read tool run
   // exactly the code shipped, without initializing credentials or a model.
-  for (const name of ['processImage', 'createReadToolDefinition']) {
+  for (const name of ['processImage', 'createReadToolDefinition', 'createCraftSettingsManager', 'shouldCompact', 'readContextUsage']) {
     if (!source.includes(`function ${name}(`)) throw new Error(`Missing bundled image probe: ${name}`)
   }
   const probe = `
 globalThis.fetch = () => { throw new Error('Offline image probe cannot access the network') };
 (async () => {
+  const settings = createCraftSettingsManager();
+  for (const capacity of [1000000, 200000, 131072, 8192]) {
+    const model = {id: 'smoke', provider: 'test', contextWindow: capacity};
+    const policy = settings.getCompactionSettings(model);
+    const threshold = Math.floor(capacity * 70 / 100);
+    if (shouldCompact(threshold, capacity, policy) || !shouldCompact(threshold + 1, capacity, policy)) {
+      throw new Error('Bundled compaction threshold is not 70 percent');
+    }
+    const usage = readContextUsage({model, settingsManager: settings, getContextUsage: () => ({tokens: 1, contextWindow: capacity})});
+    if (usage.compactionSettings?.reserveTokens !== capacity - threshold) throw new Error('Host threshold metadata is stale');
+  }
+  console.log('PI_POLICY_SMOKE_OK: model-aware 70 percent thresholds and host metadata');
   const fs = await import('node:fs/promises');
   const photon = await import('@silvia-odwyer/photon-node');
   for (const [name, mimeType] of [['large.png', 'image/png'], ['large.jpg', 'image/jpeg']]) {
@@ -68,8 +80,9 @@ globalThis.fetch = () => { throw new Error('Offline image probe cannot access th
     child.on('error', error => { clearTimeout(timer); reject(error) })
     child.on('close', code => { clearTimeout(timer); resolveResult({ code, output }) })
   })
-  if (result.code !== 0 || !result.output.includes('PI_IMAGE_SMOKE_OK')) {
+  if (result.code !== 0 || !result.output.includes('PI_IMAGE_SMOKE_OK') || !result.output.includes('PI_POLICY_SMOKE_OK')) {
     throw new Error(`Relocated Pi image smoke test failed:\n${result.output}`)
   }
   console.log('PI_IMAGE_SMOKE_OK: PNG/JPEG prompt inputs and Read tool images')
+  console.log('PI_POLICY_SMOKE_OK: model-aware 70 percent thresholds and host metadata')
 } finally { rmSync(scratch, { recursive: true, force: true }) }

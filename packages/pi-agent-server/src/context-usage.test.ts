@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { deferContextUsage, readContextUsage } from './context-usage.ts';
+import { createCraftSettingsManager } from './session-settings.ts';
 
 function session(overrides: Partial<any> = {}) {
   return {
@@ -21,6 +22,13 @@ describe('Pi server context usage transport', () => {
     expect(readContextUsage(session({ getContextUsage: () => { throw new Error('not ready'); } }))).toEqual({
       compactionSettings: { enabled: true, reserveTokens: 31_000 },
     });
+  });
+
+  it('reports the active model threshold to the host after a model switch', () => {
+    const current = session({ settingsManager: createCraftSettingsManager(), model: { contextWindow: 1_000_000 } });
+    expect(readContextUsage(current).compactionSettings?.reserveTokens).toBe(300_000);
+    current.model = { contextWindow: 200_000 };
+    expect(readContextUsage(current).compactionSettings?.reserveTokens).toBe(60_000);
   });
 
   it('guards deferred post-message reads against stale session replacement', async () => {

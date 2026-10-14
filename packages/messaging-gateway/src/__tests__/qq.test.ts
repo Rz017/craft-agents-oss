@@ -91,9 +91,26 @@ describe('QQ official adapter', () => {
     await fake.receive(inbound('group', '', 'm5'))
     expect(received.map((msg) => [msg.channelId, msg.text])).toEqual([
       ['group:same-id', '/pair 123456'], ['c2c:same-id', 'hello'],
+      ['group:group', 'ambient'],
     ])
     await adapter.sendText('group:same-id', 'reply')
     expect(fake.sent[0]?.target).toEqual({ scope: 'group', targetId: 'same-id', msgId: 'm1' })
+  })
+
+  it('delivers another inbound message while the first session turn is still running', async () => {
+    const { fake, adapter } = await makeAdapter()
+    let release!: () => void
+    const running = new Promise<void>(resolve => { release = resolve })
+    const received: string[] = []
+    adapter.onMessage(async msg => {
+      received.push(msg.text)
+      if (msg.text === 'first') await running
+    })
+    const first = fake.receive(inbound('g1', 'first'))
+    try {
+      await fake.receive({ ...inbound('g1', 'second'), rawEventType: 'GROUP_MESSAGE_CREATE' })
+      expect(received).toEqual(['first', 'second'])
+    } finally { release(); await first }
   })
 
   it('chunks long Unicode replies without losing text, and recovers from send failures', async () => {
@@ -152,7 +169,7 @@ describe('QQ official adapter', () => {
     gateway.registerAdapter(adapter); await gateway.start(); cleanups.push(() => gateway.stop())
     globalThis.fetch = (async () => { downloads++; return new Response('QQ attachment body') }) as unknown as typeof fetch
     try {
-      const message = { ...inbound('g1', '', 'attachment'), attachments: [{ content_type: 'text/plain', filename: 'note.txt', url: 'https://multimedia.nt.qq.com.cn/file' }] }
+      const message = { ...inbound('g1', '', 'attachment'), rawEventType: 'GROUP_MESSAGE_CREATE', attachments: [{ content_type: 'text/plain', filename: 'note.txt', url: 'https://multimedia.nt.qq.com.cn/file' }] }
       await fake.receive({ ...message, senderId: 'stranger', messageId: 'blocked' })
       expect(downloads).toBe(0)
       await fake.receive(message)
